@@ -247,64 +247,57 @@ if (!text) return sock.sendMessage(from, { text: '¿Qué playlist buscamos, pari
 break;
 
 case 'album': {
-    if (!text) return sock.sendMessage(from, { text: '¿De quién buscamos el álbum, pariente? Pasa el nombre del artista o disco.' });
+    if (!text) return sock.sendMessage(from, { text: '¿De quién buscamos el álbum, pariente?' });
 
     try {
         const yts = require('yt-search');
         const axios = require('axios');
+        const apiKey = 'sylphy-ty5xtWm';
 
-        // Buscamos los videos
         const search = await yts(text);
-        if (!search || !search.videos || search.videos.length === 0) {
-            return sock.sendMessage(from, { text: '❌ No encontré canciones para ese álbum.' });
-        }
+        if (!search || !search.videos.length) return sock.sendMessage(from, { text: '❌ No hallé nada.' });
 
-        // Tomamos máximo 8 para no saturar la API ni el bot
-        const canciones = search.videos.slice(0, 8);
-        await sock.sendMessage(from, { text: `💿 Encontré *${canciones.length}* rolas. Las estoy preparando...` });
+        const canciones = search.videos.slice(0, 5); // Bajamos 5 para probar estabilidad
+        await sock.sendMessage(from, { text: `💿 Preparando *${canciones.length}* canciones. Esto evita el error de 0kb, aguanta...` });
 
         for (let v of canciones) {
             try {
-                // Verificamos que tengamos URL
-                if (!v.url) continue;
+                // 1. Obtenemos el link de la API
+                const res = await axios.get(`https://sylphy.xyz/download/ytmp3?url=${encodeURIComponent(v.url)}&api_key=${apiKey}`);
+                const dl_url = res.data.result?.dl_url;
 
-                // Llamada a la API de Sylphy
-                const apiUrl = `https://sylphy.xyz/download/ytmp3?url=${encodeURIComponent(v.url)}&api_key=sylphy-ty5xtWm`;
-                const res = await axios.get(apiUrl);
-
-                // Validamos que la API nos de un resultado positivo
-                if (res.data && res.data.result && res.data.result.dl_url) {
-                    const dl_url = res.data.result.dl_url;
-                    const cleanTitle = v.title.replace(/[\\/:*?"<>|]/g, "").substring(0, 30);
-
-                    await sock.sendMessage(from, { 
-                        audio: { url: dl_url }, 
-                        mimetype: 'audio/mp4', 
-                        fileName: `${cleanTitle}.mp3`,
-                        ptt: false // Cambia a true si quieres que se mande como nota de voz
+                if (dl_url) {
+                    // 2. DESCARGA DIRECTA AL BUFFER (Aquí está el truco)
+                    // Bajamos el archivo al bot primero para asegurar que pese lo que debe
+                    const response = await axios.get(dl_url, { 
+                        responseType: 'arraybuffer',
+                        headers: { 'User-Agent': 'Mozilla/5.0' }
                     });
-                } else {
-                    console.log(`⚠️ API no pudo procesar: ${v.title}`);
+
+                    // 3. Enviamos el Buffer de audio
+                    await sock.sendMessage(from, { 
+                        audio: Buffer.from(response.data), 
+                        mimetype: 'audio/mp4', 
+                        fileName: `${v.title}.mp3` 
+                    }, { quoted: m });
                 }
 
-                // Pausa de 2.5 segundos (importante para que la API no te bloquee por spam)
-                await new Promise(r => setTimeout(r, 2500));
+                // Pausa de 3 segundos para no saturar la RAM de Railway
+                await new Promise(r => setTimeout(r, 3000));
 
-            } catch (innerError) {
-                console.error(`Error procesando rola "${v.title}":`, innerError.message);
-                continue; // Si una falla, pasamos a la siguiente
+            } catch (err) {
+                console.error(`Error en rola: ${v.title}`, err.message);
+                continue;
             }
         }
-
-        await sock.sendMessage(from, { text: '✅ *¡Álbum terminado!* Disfruta la música, pariente.' });
+        await sock.sendMessage(from, { text: '✅ *Álbum enviado con éxito.*' });
 
     } catch (e) {
-        console.error("ERROR CRÍTICO EN ÁLBUM:", e);
-        await sock.sendMessage(from, { text: '❌ Hubo un error crítico al procesar el álbum.' });
+        console.error("ERROR ALBUM:", e);
+        await sock.sendMessage(from, { text: '❌ Error al procesar el álbum.' });
     }
 }
 break;
-
 
 case 'pin': case 'pinterest': {
     if (!text) return sock.sendMessage(from, { text: '¿Qué buscamos en Pinterest? Ejemplo: .pin yamaha mt09' });
