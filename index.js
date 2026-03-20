@@ -49,30 +49,37 @@ async function startBot() {
         version,
         logger: pino({ level: 'silent' }),
         auth: state,
-        browser: ['Bot Maestro', 'Chrome', '1.0.0']
+        browser: ["Ubuntu", "Chrome", "20.0.04"], // Importante para que acepte el código
+        printQRInTerminal: false, // Apagamos el QR para que no estorbe
     });
+
+    // --- LÓGICA DEL CÓDIGO DE 8 DÍGITOS ---
+    if (!sock.authState.creds.registered) {
+        // PON TU NÚMERO AQUÍ con código de país (Ej: 52433...) 
+        // O déjalo así para que lo pidas por consola
+        const phoneNumber = "52XXXXXXXXXX"; // <--- Pon tu número con el 521 o 52
+        
+        setTimeout(async () => {
+            let code = await sock.requestPairingCode(phoneNumber);
+            console.log('-------------------------------------------');
+            console.log(`🔥 TU CÓDIGO DE VINCULACIÓN ES: ${code} 🔥`);
+            console.log('-------------------------------------------');
+        }, 3000);
+    }
 
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        if (qr) {
-            console.log('-------------------------------------------');
-            console.log('  ESCANEA EL QR CON TU CELULAR (WHATSAPP)  ');
-            console.log('-------------------------------------------');
-            qrcode.generate(qr, { small: true });
-        }
+        const { connection, lastDisconnect } = update;
         if (connection === 'close') {
-            const statusCode = (lastDisconnect.error instanceof Boom)?.output?.statusCode;
-            if (statusCode !== 401) {
-                console.log('🔄 Reconectando en 5 segundos...');
-                setTimeout(() => startBot(), 5000);
-            }
+            const shouldReconnect = (lastDisconnect.error instanceof Boom)?.output?.statusCode !== 401;
+            if (shouldReconnect) setTimeout(() => startBot(), 5000);
         } else if (connection === 'open') {
-            console.log('✅ BOT MAESTRO ONLINE');
+            console.log('✅ BOT MAESTRO ONLINE - Vinculado por código');
         }
     });
 
+    // ... (Aquí sigue el resto de tu lógica de mensajes)
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
         if (!m.message || m.key.fromMe) return;
