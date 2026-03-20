@@ -1,0 +1,26 @@
+{
+  "82906290606190@lid": {
+    "coins": 900440,
+    "xp": 160,
+    "level": 2,
+    "lastWork": 1773089114468,
+    "lastRob": 0
+  },
+  "120363423346841292@g.us": {
+    "antilink": false
+  },
+  "120363424575670522@g.us": {
+    "antilink": true
+  },
+  "users": {
+    "82906290606190@lid": {
+      "money": 100
+    }
+  },
+  "groups": {
+    "120363423346841292@g.us": {
+      "antilink": false,
+      "sfw": true
+    }
+  }
+}

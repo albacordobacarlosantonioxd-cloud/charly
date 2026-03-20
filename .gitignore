@@ -1,7 +1,4 @@
 node_modules
 auth_info_baileys
-.env
-database.json
-*.exe
-*.mp3
-*.mp4
+*.log
+package-lock.json
