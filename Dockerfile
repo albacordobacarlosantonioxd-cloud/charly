@@ -1,5 +1,6 @@
 # 1. Usamos una imagen de Node.js ligera pero completa
-FROM node:18-bullseye
+# 1. Cambiamos de node:18 a node:20
+FROM node:20-bullseye
 
 # 2. Instalamos herramientas del sistema (ffmpeg y python)
 RUN apt-get update && apt-get install -y \
