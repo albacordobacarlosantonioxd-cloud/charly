@@ -57,7 +57,7 @@ async function startBot() {
     if (!sock.authState.creds.registered) {
         // PON TU NÚMERO AQUÍ con código de país (Ej: 52433...) 
         // O déjalo así para que lo pidas por consola
-        const phoneNumber = "52XXXXXXXXXX"; // <--- Pon tu número con el 521 o 52
+        const phoneNumber = "526711084329"; // <--- Pon tu número con el 521 o 52
         
         setTimeout(async () => {
             let code = await sock.requestPairingCode(phoneNumber);
