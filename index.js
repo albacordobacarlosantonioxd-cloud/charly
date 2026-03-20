@@ -172,24 +172,26 @@ case 'audio': case 'mp3': {
     try {
         const finalQuery = text.startsWith('http') ? text : `ytsearch1:${text}`;
         
-        // 1. Obtener info con Cookies + User-Agent de iPhone
-        let videoInfo = await ytDlpWrap.getVideoInfo([
-            finalQuery,
-            '--no-check-certificate',
-            '--cookies', './cookies.txt',
-            '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-            '--extractor-args', 'youtube:player_client=ios,web', // 👈 ESTO ES EL ANTIDOTO AL 403
-            '--dump-json'
-        ]);
+        // 1. Obtener info con los refuerzos que ya pusimos
+let videoInfo = await ytDlpWrap.getVideoInfo([
+    finalQuery,
+    '--no-check-certificate',
+    '--cookies', './cookies.txt',
+    '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    '--extractor-args', 'youtube:player_client=ios,web',
+    '--dump-json'
+]);
 
-        if (!videoInfo) return sock.sendMessage(from, { text: '❌ No encontré la rola, intenta con otro nombre.' });
+// --- ESTA ES LA PROTECCIÓN ---
+if (!videoInfo || !videoInfo.id) {
+    console.log("DEBUG - Info recibida:", videoInfo); // Para que lo veas en los logs de Railway
+    return sock.sendMessage(from, { text: '❌ No pude obtener los detalles del video. Intenta con un link directo o revisa tus cookies.' });
+}
 
-        const vTitle = videoInfo.title || 'Audio';
-        const vId = videoInfo.id;
-        const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 40) || 'audio';
-        
-        const outPath = path.join('/tmp', `${Date.now()}_${vId}.mp3`);
-        const thumbUrl = `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`;
+const vId = videoInfo.id; // Ahora sí estamos seguros de que existe
+const vTitle = videoInfo.title || 'Audio/Video';
+const thumbUrl = `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`;
+// -----------------------------
 
         await sock.sendMessage(from, { 
             image: { url: thumbUrl }, 
@@ -244,21 +246,33 @@ case 'video': case 'mp4': {
     try {
         const finalQuery = text.startsWith('http') ? text : `ytsearch1:${text}`;
         
-        let videoInfo = await ytDlpWrap.getVideoInfo([
-            finalQuery,
-            '--no-check-certificate',
-            '--cookies', './cookies.txt',
-            '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-            '--extractor-args', 'youtube:player_client=ios,web',
-            '--dump-json'
-        ]);
+       // 1. Obtener info del video con los refuerzos
+        let videoInfo;
+        try {
+            videoInfo = await ytDlpWrap.getVideoInfo([
+                finalQuery,
+                '--no-check-certificate',
+                '--cookies', './cookies.txt',
+                '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+                '--extractor-args', 'youtube:player_client=ios,web',
+                '--dump-json'
+            ]);
+        } catch (err) {
+            console.error("ERROR AL OBTENER INFO:", err.message);
+            return sock.sendMessage(from, { text: '❌ YouTube bloqueó la búsqueda. Revisa tus cookies, pariente.' });
+        }
 
-        if (!videoInfo) return sock.sendMessage(from, { text: '❌ No lo hallé, pariente.' });
+        // --- VALIDACIÓN DE ID (Evita el error de 'undefined') ---
+        if (!videoInfo || !videoInfo.id) {
+            console.log("DEBUG - Estructura de videoInfo fallida:", videoInfo);
+            return sock.sendMessage(from, { text: '❌ No pude extraer los datos del video. Intenta con un link directo.' });
+        }
 
+        const vId = videoInfo.id; 
         const vTitle = videoInfo.title || 'Video';
-        const vId = videoInfo.id;
         const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 30);
         const outPath = path.join('/tmp', `${Date.now()}_video.mp4`);
+        const thumbUrl = `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`; // Ahora sí, vId está garantizado;
 
         await sock.sendMessage(from, { text: `✅ *Encontrado:* ${vTitle}\n⏳ _Descargando (Bypass 403)..._` });
 
