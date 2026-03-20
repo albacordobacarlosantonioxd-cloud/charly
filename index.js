@@ -166,59 +166,73 @@ const pushname = m.pushName || 'Usuario'; // Esto extrae el nombre de quien escr
        switch (command) {
 
 
-case 'playlist': {
-    if (!text.includes('spotify.com')) return sock.sendMessage(from, { text: 'Pasa un link de Spotify válido, pariente.' });
-    
-    await sock.sendMessage(from, { text: '🎧 *Procesando Playlist de Spotify...* Aguanta un momento.' });
+case 'playlist': case 'play': {
+    if (!text) return sock.sendMessage(from, { text: '¿Qué playlist buscamos en Spotify? Pasa el nombre, pariente.' });
 
     try {
         const axios = require('axios');
         const apiKey = 'sylphy-ty5xtWm';
+        
+        await sock.sendMessage(from, { text: `🔎 *Buscando playlists con el nombre:* _${text}_...` });
 
-        // 1. Usamos tu función getTracks para obtener la lista de nombres/artistas
-        const tracks = await getTracks(text);
-        if (!tracks || tracks.length === 0) return sock.sendMessage(from, { text: '❌ No pude extraer canciones de ese link.' });
+        // 1. Buscamos la playlist en Spotify (usamos el endpoint de search)
+        // Nota: Asegúrate que este endpoint devuelva objetos tipo 'playlist'
+        const searchRes = await axios.get(`https://sylphy.xyz/search/spotify?q=${encodeURIComponent(text + " playlist")}&api_key=${apiKey}`);
+        
+        const resultados = searchRes.data.result;
+        if (!resultados || resultados.length === 0) {
+            return sock.sendMessage(from, { text: '❌ No hallé ninguna playlist con ese nombre.' });
+        }
 
-        // Limitamos a 10 para que la API no nos bloquee por exceso de peticiones
-        const listaCorta = tracks.slice(0, 10); 
-        await sock.sendMessage(from, { text: `🎶 Encontré *${listaCorta.length}* temas. Bajando directamente de Spotify...` });
+        // 2. Tomamos la primera playlist que encontremos
+        const primeraPlaylist = resultados[0]; 
+        const playlistUrl = primeraPlaylist.url;
+
+        await sock.sendMessage(from, { 
+            text: `✅ *Playlist Encontrada:* _${primeraPlaylist.title}_\n🔗 *Link:* ${playlistUrl}\n\n🎧 *Extrayendo canciones y empezando descarga...*` 
+        });
+
+        // 3. Usamos tu función getTracks para sacar las canciones del link encontrado
+        const tracks = await getTracks(playlistUrl);
+        if (!tracks || tracks.length === 0) {
+            return sock.sendMessage(from, { text: '❌ Encontré la playlist, pero no pude leer las canciones.' });
+        }
+
+        // Limitamos a 8 canciones para que Railway no explote
+        const listaCorta = tracks.slice(0, 8); 
 
         for (let track of listaCorta) {
             try {
-                // Verificamos que el track tenga el formato correcto (depende de tu función getTracks)
-                // Usualmente getTracks devuelve objetos con .external_urls.spotify
-                const trackUrl = track.external_urls?.spotify || track.url; 
-                
+                // Sacamos el link de la canción individual
+                let trackUrl = track.url || track.external_urls?.spotify;
                 if (!trackUrl) continue;
 
-                // 2. Llamada directa a la API de Spotify de Sylphy
-                const res = await axios.get(`https://sylphy.xyz/download/spotify?url=${encodeURIComponent(trackUrl)}&api_key=${apiKey}`);
+                // 4. Llamada a la API de Descarga
+                const dlRes = await axios.get(`https://sylphy.xyz/download/spotify?url=${encodeURIComponent(trackUrl)}&api_key=${apiKey}`);
                 
-                const dl_url = res.data.result?.dl_url;
-                const title = track.name || 'Audio';
-
+                const dl_url = dlRes.data.result?.dl_url;
                 if (dl_url) {
                     await sock.sendMessage(from, { 
                         audio: { url: dl_url }, 
                         mimetype: 'audio/mp4', 
-                        fileName: `${title}.mp3` 
+                        fileName: `${track.name}.mp3` 
                     });
                 }
 
-                // Pausa de 2.5 segundos para no saturar la API
-                await new Promise(r => setTimeout(r, 2500));
+                // Pausa de 3 segundos para que la API no nos mande alv
+                await new Promise(r => setTimeout(r, 3000));
 
-            } catch (innerError) {
-                console.error(`Error bajando track:`, innerError.message);
-                continue; // Si una falla, que siga con la otra
+            } catch (err) {
+                console.log("Error en rola individual:", err.message);
+                continue;
             }
         }
 
-        await sock.sendMessage(from, { text: '✅ *¡Playlist completada!* Disfruta tus rolas.' });
+        await sock.sendMessage(from, { text: `✅ *¡Listo!* He bajado las rolas principales de la playlist: *${primeraPlaylist.title}*` });
 
     } catch (e) {
-        console.error("ERROR CRÍTICO EN PLAYLIST:", e);
-        await sock.sendMessage(from, { text: '❌ Hubo un fallo al conectar con la API de Spotify.' });
+        console.error("ERROR EN FINDPLAYLIST:", e);
+        await sock.sendMessage(from, { text: '❌ Hubo un fallo en la búsqueda o descarga de la playlist.' });
     }
 }
 break;
