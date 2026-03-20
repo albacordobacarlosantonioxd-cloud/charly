@@ -18,8 +18,10 @@ const path = require('path');
 const fs = require('fs-extra');
 const axios = require('axios');
 const yts = require('yt-search');
-const YTDlpWrap = require('yt-dlp-wrap').default;
-const ytDlpWrap = new YTDlpWrap();
+// ✅ PRIMERO IMPORTAS LA LIBRERÍA
+const YTDlpWrap = require('yt-dlp-wrap').default; 
+// ✅ LUEGO CREAS LA INSTANCIA USANDO LA RUTA DEL DOCKERFILE
+const ytDlpWrap = new YTDlpWrap('/usr/local/bin/yt-dlp');
 const fetch = require('node-fetch');
 const { getTracks } = require('spotify-url-info')(fetch);
 // --- AQUÍ ESTÁ EL DE QR TERMINAL ---
