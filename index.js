@@ -22,6 +22,8 @@ const YTDlpWrap = require('yt-dlp-wrap').default;
 const ytDlpWrap = new YTDlpWrap();
 const fetch = require('node-fetch');
 const { getTracks } = require('spotify-url-info')(fetch);
+// --- AQUÍ ESTÁ EL DE QR TERMINAL ---
+const qrcode = require('qrcode-terminal');
 
 // --- CONFIGURACIÓN PARA RAILWAY (LINUX) ---
 const ffmpeg = require('ffmpeg-static');
@@ -53,6 +55,7 @@ let db = loadDB();
 const saveDB = () => fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 
 
+// --- 2. FUNCIÓN PRINCIPAL ---
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     const { version } = await fetchLatestBaileysVersion();
@@ -61,36 +64,30 @@ async function startBot() {
         version,
         logger: pino({ level: 'silent' }),
         auth: state,
-        browser: ["Ubuntu", "Chrome", "20.0.04"], // Importante para que acepte el código
-        printQRInTerminal: false, // Apagamos el QR para que no estorbe
+        printQRInTerminal: false,
+        browser: ["Bot Maestro", "Chrome", "1.0.0"]
     });
 
-    // --- LÓGICA DEL CÓDIGO DE 8 DÍGITOS ---
-    if (!sock.authState.creds.registered) {
-        // PON TU NÚMERO AQUÍ con código de país (Ej: 52433...) 
-        // O déjalo así para que lo pidas por consola
-        const phoneNumber = "526711084329"; // <--- Pon tu número con el 521 o 52
-        
-        setTimeout(async () => {
-            let code = await sock.requestPairingCode(phoneNumber);
-            console.log('-------------------------------------------');
-            console.log(`🔥 TU CÓDIGO DE VINCULACIÓN ES: ${code} 🔥`);
-            console.log('-------------------------------------------');
-        }, 3000);
-    }
-
+    // Guardar la sesión automáticamente
     sock.ev.on('creds.update', saveCreds);
 
+    // Manejo de conexión y QR
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+            console.log('📸 ¡ESCANEA ESTE QR CON TU WHATSAPP!');
+            qrcode.generate(qr, { small: true }); 
+        }
+
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error instanceof Boom)?.output?.statusCode !== 401;
-            if (shouldReconnect) setTimeout(() => startBot(), 5000);
+            const shouldReconnect = (lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('⚠️ Conexión cerrada, reintentando:', shouldReconnect);
+            if (shouldReconnect) startBot();
         } else if (connection === 'open') {
-            console.log('✅ BOT MAESTRO ONLINE - Vinculado por código');
+            console.log('✅ ¡CONECTADO EXITOSAMENTE, PARIENTE!');
         }
     });
-
     // ... (Aquí sigue el resto de tu lógica de mensajes)
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];

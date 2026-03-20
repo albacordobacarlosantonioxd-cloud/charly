@@ -1,4 +1,15 @@
-node_modules
-auth_info_baileys
+# Ignorar las librerías pesadas (Railway las instala solo)
+node_modules/
+
+# Ignorar archivos de basura y errores
 *.log
-package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# --- IMPORTANTE: NO AGREGUES AQUÍ 'auth_info_baileys' ---
+# Queremos que la sesión SÍ se suba a GitHub para que Railway la reconozca.
