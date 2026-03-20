@@ -10,6 +10,10 @@ const path = require('path');
 const fs = require('fs-extra');
 const axios = require('axios');
 const yts = require('yt-search');
+const YTDlpWrap = require('yt-dlp-wrap').default;
+const ytDlpWrap = new YTDlpWrap(); // Esto busca el binario automáticamente
+const fetch = require('node-fetch');
+const { getTracks } = require('spotify-url-info')(fetch);
 
 // --- CONFIGURACIÓN DE RUTAS Y LLAVES ---
 // Detecta si es Windows (.exe) o Linux (servidor)
@@ -127,255 +131,198 @@ const pushname = m.pushName || 'Usuario'; // Esto extrae el nombre de quien escr
        switch (command) {
 
 case 'audio': case 'mp3': {
-    const ytPath = path.join(__dirname, 'yt-dlp.exe');
     if (!text) return sock.sendMessage(from, { text: '¿Qué rola buscamos, pariente?' });
-    
-    await sock.sendMessage(from, { text: 'Buscando..' });
+    await sock.sendMessage(from, { text: '⏳ Buscando y procesando audio...' });
 
     try {
         const finalQuery = text.startsWith('http') ? text : `ytsearch1:${text}`;
+        // Obtenemos metadatos sin exec
+        const metadata = await ytDlpWrap.getVideoInfo([finalQuery, '--no-check-certificate']);
         
-        // Obtenemos el Título, ID y Autor con etiquetas claras
-        const infoCmd = `"${ytPath}" --no-check-certificate --print "TITULO:%(title)s" --print "ID:%(id)s" --print "AUTOR:%(uploader)s" "${finalQuery}"`;
-        
-        exec(infoCmd, async (error, stdout) => {
-            if (error || !stdout) return sock.sendMessage(from, { text: '❌ No encontré la rola.' });
+        const vTitle = metadata.title || 'Audio';
+        const vId = metadata.id;
+        const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 40) || 'audio';
+        const outPath = path.join(__dirname, `${Date.now()}.mp3`);
+        const thumbUrl = `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`;
 
-            const lines = stdout.split('\n');
-            const vTitle = lines.find(l => l.startsWith('TITULO:'))?.replace('TITULO:', '').trim() || 'Audio';
-            const vId = lines.find(l => l.startsWith('ID:'))?.replace('ID:', '').trim();
-            const vAuthor = lines.find(l => l.startsWith('AUTOR:'))?.replace('AUTOR:', '').trim() || 'Desconocido';
+        await sock.sendMessage(from, { 
+            image: { url: thumbUrl }, 
+            caption: `✅ *Encontrado*\n📌 *Título:* ${vTitle}\n⏳ _Descargando..._`
+        });
 
-            if (!vId) return sock.sendMessage(from, { text: '❌ Error al obtener datos.' });
+        // Descarga directa usando la librería
+        await ytDlpWrap.execPromise([
+            `https://www.youtube.com/watch?v=${vId}`,
+            '--no-check-certificate',
+            '-x',
+            '--audio-format', 'mp3',
+            '-o', outPath
+        ]);
 
-            // Limpiamos el título de caracteres que Windows no acepta en archivos
-            // 1. Limpiamos el título para que Windows no chille
-            const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 40) || 'audio';
-            
-            // 2. IMPORTANTE: El archivo se llamará físicamente como la canción
-            const outPath = path.join(__dirname, `${safeTitle}.mp3`);
-            const thumbUrl = `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`;
-
+        if (fs.existsSync(outPath)) {
             await sock.sendMessage(from, { 
-                image: { url: thumbUrl }, 
-                caption: `✅ *Encontrado*\n📌 *Título:* ${vTitle}\n⏳ _Descargando..._`
-            });
-
-           // 3. Descargamos con el nombre real
-            const downloadCmd = `"${ytPath}" --no-check-certificate -x --audio-format mp3 -o "${outPath}" "https://www.youtube.com/watch?v=${vId}"`;
-
-exec(downloadCmd, async (dlError) => {
-                if (dlError) return sock.sendMessage(from, { text: '❌ Error en la descarga.' });
-
-                if (fs.existsSync(outPath)) {
-                    // --- TRUCO: Aseguramos el nombre limpio con extensión ---
-                    const nombreFinal = safeTitle.endsWith('.mp3') ? safeTitle : `${safeTitle}.mp3`;
-
-await sock.sendMessage(from, { 
-    audio: { url: outPath }, 
-    mimetype: 'audio/mp4', // WhatsApp prefiere mp4 para audios internos
-    fileName: `${safeTitle}.mp3`,
-    caption: `🎵 *${vTitle}*`
-}, { quoted: m });
-                    
-                    // Borramos después de 30 segundos
-                    setTimeout(() => { 
-                        if (fs.existsSync(outPath)) {
-                            try { fs.unlinkSync(outPath); } catch(e) {}
-                        }
-                    }, 30000);
-                }
-            });
-        }); // Cierre del exec de info
-
+                audio: { url: outPath }, 
+                mimetype: 'audio/mp4', 
+                fileName: `${safeTitle}.mp3`,
+                caption: `🎵 *${vTitle}*`
+            }, { quoted: m });
+            
+            setTimeout(() => { if (fs.existsSync(outPath)) fs.unlinkSync(outPath); }, 30000);
+        }
     } catch (e) {
-        console.error("ERROR CRÍTICO:", e);
-        await sock.sendMessage(from, { text: '❌ Error en el proceso.' });
+        console.error("ERROR AUDIO:", e);
+        await sock.sendMessage(from, { text: '❌ No pude bajar la rola, pariente.' });
     }
 }
 break;
 
 case 'video': case 'mp4': {
-    const ytPath = path.join(__dirname, 'yt-dlp.exe');
     if (!text) return sock.sendMessage(from, { text: '¿Qué video buscamos, pariente?' });
-    
-    await sock.sendMessage(from, { text: '🎥 *Bajando video*' });
+    await sock.sendMessage(from, { text: '🎥 *Bajando video...*' });
 
     try {
         const finalQuery = text.startsWith('http') ? text : `ytsearch1:${text}`;
+        const metadata = await ytDlpWrap.getVideoInfo([finalQuery, '--no-check-certificate']);
         
-        const infoCmd = `"${ytPath}" --no-check-certificate --print "TITULO:%(title)s" --print "ID:%(id)s" "${finalQuery}"`;
-        
-        exec(infoCmd, async (error, stdout) => {
-            if (error || !stdout) return sock.sendMessage(from, { text: '❌ No lo hallé.' });
+        const vTitle = metadata.title || 'Video';
+        const vId = metadata.id;
+        const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 30);
+        const outPath = path.join(__dirname, `${Date.now()}.mp4`);
 
-            const lines = stdout.split('\n');
-            const vTitle = lines.find(l => l.startsWith('TITULO:'))?.replace('TITULO:', '').trim() || 'Video';
-            const vId = lines.find(l => l.startsWith('ID:'))?.replace('ID:', '').trim();
-            const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 30);
-            const outPath = path.join(__dirname, `${Date.now()}.mp4`);
+        // Descarga optimizada para móvil (MP4 480p)
+        await ytDlpWrap.execPromise([
+            `https://www.youtube.com/watch?v=${vId}`,
+            '--no-check-certificate',
+            '-f', 'mp4[height<=480]/best[height<=480][ext=mp4]/best[ext=mp4]/best',
+            '--merge-output-format', 'mp4',
+            '-o', outPath
+        ]);
 
-            // --- ESTE ES EL CAMBIO CLAVE: LIMITAMOS A 480P ---
-           // Este comando obliga a YouTube a buscar solo MP4 compatibles con celulares
-const downloadCmd = `"${ytPath}" --no-check-certificate -f "mp4[height<=480]/best[height<=480][ext=mp4]/best[ext=mp4]/best" --merge-output-format mp4 -o "${outPath}" "https://www.youtube.com/watch?v=${vId}"`;
+        if (fs.existsSync(outPath)) {
+            const stats = fs.statSync(outPath);
+            if (stats.size / (1024 * 1024) > 50) {
+                fs.unlinkSync(outPath);
+                return sock.sendMessage(from, { text: '⚠️ El video pesa más de 50MB. Intenta con uno más corto.' });
+            }
 
-            exec(downloadCmd, async (dlError) => {
-                if (dlError) return sock.sendMessage(from, { text: '❌ Error al procesar.' });
+            await sock.sendMessage(from, { 
+                video: { url: outPath }, 
+                caption: `✅ *${vTitle}*\n\n¡Listo tu video!`,
+                mimetype: 'video/mp4',
+                fileName: `${safeTitle}.mp4`
+            }, { quoted: m });
 
-                if (fs.existsSync(outPath)) {
-                    const stats = fs.statSync(outPath);
-                    const fileSizeInBytes = stats.size;
-                    const fileSizeInMegabytes = fileSizeInBytes / (1024 * 1024);
-
-                    console.log(`Video descargado: ${vTitle} - Peso: ${fileSizeInMegabytes.toFixed(2)} MB`);
-
-                    // Si el video se pasó de lanza (más de 50MB), mejor avisar
-                    if (fileSizeInMegabytes > 50) {
-                        return sock.sendMessage(from, { text: '⚠️ El video pesa mucho para WhatsApp. Intenta con uno más corto.' });
-                    }
-
-                    setTimeout(async () => {
-                        try {
-                            await sock.sendMessage(from, { 
-                                video: { url: outPath }, // Usar URL es más ligero para archivos de 10-20MB
-                                caption: `✅ *${vTitle}*\n\n¡Listo tu video de YouTube!`,
-                                mimetype: 'video/mp4',
-                                fileName: `${safeTitle}.mp4`
-                            }, { quoted: m });
-
-                            setTimeout(() => { if (fs.existsSync(outPath)) fs.unlinkSync(outPath); }, 15000);
-                        } catch (sendErr) {
-                            console.error("Error al enviar:", sendErr);
-                            await sock.sendMessage(from, { text: '❌ No se pudo enviar el video.' });
-                        }
-                    }, 2000);
-                }
-            });
-        });
-
+            setTimeout(() => { if (fs.existsSync(outPath)) fs.unlinkSync(outPath); }, 15000);
+        }
     } catch (e) {
-        await sock.sendMessage(from, { text: '❌ Error crítico.' });
+        console.error("ERROR VIDEO:", e);
+        await sock.sendMessage(from, { text: '❌ Error al procesar el video.' });
     }
 }
 break;
 // --- CASO PLAYLIST (SPOTIFY) ---
 case 'playlist': {
-    const ytPath = path.join(__dirname, 'yt-dlp.exe');
     if (!text.includes('spotify.com')) return sock.sendMessage(from, { text: 'Pasa un link de Spotify real, pariente.' });
     
     await sock.sendMessage(from, { text: '🎧 *Extrayendo datos de Spotify...* Aguanta.' });
 
     try {
-        // 1. Extraemos las rolas
         const tracks = await getTracks(text);
         if (!tracks || tracks.length === 0) return sock.sendMessage(from, { text: '❌ No encontré rolas en esa playlist.' });
 
-        const listaCorta = tracks.slice(0, 12); // Máximo 12
+        const listaCorta = tracks.slice(0, 12); // Máximo 12 para no saturar
         await sock.sendMessage(from, { text: `🎶 Encontré *${listaCorta.length}* temas. Buscando en YouTube...` });
 
         for (let track of listaCorta) {
             try {
-                // --- VALIDACIÓN ANTI-CRASH ---
-                // Si no hay nombre, nos saltamos esta rola
                 if (!track || !track.name) continue;
 
-                // Intentamos sacar el artista de forma segura
                 const artista = (track.artists && track.artists[0]) ? track.artists[0].name : '';
                 const nombreBusqueda = `${track.name} ${artista}`.trim();
-                
                 const safeTitle = track.name.replace(/[\\/:*?"<>|]/g, "").substring(0, 40);
-                const outPath = path.join(__dirname, `${safeTitle}.mp3`);
+                const outPath = path.join(__dirname, `${Date.now()}_${safeTitle}.mp3`);
                 
-                // 2. Buscamos y bajamos de YT con el filtro de 10 min
-                const downloadCmd = `"${ytPath}" --no-check-certificate --match-filter "duration <= 600" -x --audio-format mp3 -o "${outPath}" "ytsearch1:${nombreBusqueda}"`;
+                // Descarga usando ytDlpWrap sin exec
+                await ytDlpWrap.execPromise([
+                    `ytsearch1:${nombreBusqueda}`,
+                    '--no-check-certificate',
+                    '--match-filter', 'duration <= 600',
+                    '-x',
+                    '--audio-format', 'mp3',
+                    '-o', outPath
+                ]);
 
-                await new Promise((resolve) => {
-                    exec(downloadCmd, async (dlError) => {
-                        if (!dlError && fs.existsSync(outPath)) {
-                            await sock.sendMessage(from, { 
-                                audio: { url: outPath }, 
-                                mimetype: 'audio/mpeg', 
-                                fileName: `${safeTitle}.mp3` 
-                            });
-                            // Borramos
-                            setTimeout(() => { if (fs.existsSync(outPath)) try { fs.unlinkSync(outPath); } catch(e){} }, 15000);
-                        }
-                        resolve();
+                if (fs.existsSync(outPath)) {
+                    await sock.sendMessage(from, { 
+                        audio: { url: outPath }, 
+                        mimetype: 'audio/mpeg', 
+                        fileName: `${safeTitle}.mp3` 
                     });
-                });
+                    
+                    setTimeout(() => { if (fs.existsSync(outPath)) try { fs.unlinkSync(outPath); } catch(e){} }, 15000);
+                }
             } catch (innerError) {
-                console.error("Error con una canción específica:", innerError);
-                continue; // Si una rola falla, seguimos con la que sigue
+                console.error("Error en rola individual:", innerError);
+                continue; 
             }
         }
         await sock.sendMessage(from, { text: '✅ *¡Playlist de Spotify terminada!* 😎' });
 
     } catch (e) {
         console.error("ERROR CRÍTICO SPOTIFY:", e);
-        await sock.sendMessage(from, { text: '❌ Error al leer la playlist. Revisa que sea pública.' });
+        await sock.sendMessage(from, { text: '❌ Error al leer la playlist. Asegúrate de que sea pública.' });
     }
 }
 break;
 
 case 'album': {
-    const ytPath = path.join(__dirname, 'yt-dlp.exe');
     if (!text) return sock.sendMessage(from, { text: '¿Qué álbum buscamos? Pasa el nombre.' });
 
-    await sock.sendMessage(from, { text: `💿 *Buscando las mejores 12 rolas de:* _${text}_\n⏳ _Filtro activo: Máximo 10 minutos por canción._` });
+    await sock.sendMessage(from, { text: `💿 *Buscando las mejores rolas de:* _${text}_\n⏳ _Filtro: Máximo 10 min por canción._` });
 
     try {
-        const finalQuery = `ytsearch12:${text}`;
+        // Obtenemos lista de videos (máximo 12) usando la librería
+        const metadata = await ytDlpWrap.getVideoInfo([
+            `ytsearch12:${text}`,
+            '--no-check-certificate',
+            '--flat-playlist',
+            '--print', '%(title)s|%(id)s|%(duration)s'
+        ]);
+
+        // yt-dlp-wrap a veces devuelve un string largo si usas --print
+        // Si metadata es un objeto de info, lo manejamos, si no, usamos el resultado directo
+        // Para simplificar en álbumes de búsqueda, es mejor iterar la búsqueda:
         
-        // --- EL CAMBIO ESTÁ AQUÍ: --match-filter "duration <= 600" ---
-        // 600 segundos = 10 minutos
-        const listCmd = `"${ytPath}" --no-check-certificate --flat-playlist --match-filter "duration <= 600" --print "%(title)s|%(id)s" "${finalQuery}"`;
+        await sock.sendMessage(from, { text: `🎶 Procesando canciones encontradas...` });
 
-        exec(listCmd, async (error, stdout) => {
-            if (error || !stdout || stdout.trim() === "") {
-                return sock.sendMessage(from, { text: '❌ No encontré canciones cortas con ese nombre.' });
-            }
-
-            const canciones = stdout.split('\n').filter(l => l.includes('|'));
-            
-            if (canciones.length === 0) {
-                return sock.sendMessage(from, { text: '❌ Las canciones que encontré duran más de 10 minutos.' });
-            }
-
-            await sock.sendMessage(from, { text: `🎶 *¡Encontradas!* Enviando ${canciones.length} canciones que pasaron el filtro...` });
-
-            for (let cancion of canciones) {
-                const partes = cancion.split('|');
-                if (partes.length < 2) continue;
+        for (let i = 1; i <= 12; i++) {
+            try {
+                const outPath = path.join(__dirname, `${Date.now()}_album_${i}.mp3`);
                 
-                const vTitle = partes[0].trim();
-                const vId = partes[1].trim();
-                const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 40);
-                const outPath = path.join(__dirname, `${safeTitle}.mp3`);
+                await ytDlpWrap.execPromise([
+                    `ytsearch${i}:${text}`, // Busca la posición i
+                    '--no-check-certificate',
+                    '--match-filter', 'duration <= 600',
+                    '-x',
+                    '--audio-format', 'mp3',
+                    '-o', outPath
+                ]);
 
-                // Descarga
-                const downloadCmd = `"${ytPath}" --no-check-certificate -x --audio-format mp3 -o "${outPath}" "https://www.youtube.com/watch?v=${vId}"`;
-
-                await new Promise((resolve) => {
-                    exec(downloadCmd, async (dlError) => {
-                        if (!dlError && fs.existsSync(outPath)) {
-                            await sock.sendMessage(from, { 
-                                audio: { url: outPath }, 
-                                mimetype: 'audio/mpeg', 
-                                fileName: `${safeTitle}.mp3` 
-                            });
-                            
-                            setTimeout(() => { if (fs.existsSync(outPath)) fs.unlinkSync(outPath); }, 15000);
-                        }
-                        resolve(); 
+                if (fs.existsSync(outPath)) {
+                    await sock.sendMessage(from, { 
+                        audio: { url: outPath }, 
+                        mimetype: 'audio/mpeg', 
+                        fileName: `track_${i}.mp3` 
                     });
-                });
-            }
-            await sock.sendMessage(from, { text: '✅ *¡Álbum completado!* Solo mandé las de menos de 10 min.' });
-        });
+                    setTimeout(() => { if (fs.existsSync(outPath)) fs.unlinkSync(outPath); }, 15000);
+                }
+            } catch (err) { continue; }
+        }
+        await sock.sendMessage(from, { text: '✅ *¡Búsqueda de álbum completada!*' });
 
     } catch (e) {
         console.error(e);
-        await sock.sendMessage(from, { text: '❌ Error en el álbum.' });
+        await sock.sendMessage(from, { text: '❌ Error en el proceso del álbum.' });
     }
 }
 break;
