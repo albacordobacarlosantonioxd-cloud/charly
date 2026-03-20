@@ -1,23 +1,21 @@
 const { 
     default: makeWASocket, 
     useMultiFileAuthState, 
-    fetchLatestBaileysVersion 
+    fetchLatestBaileysVersion,
+    DisconnectReason
 } = require("@whiskeysockets/baileys");
 const { Boom } = require("@hapi/boom");
 const pino = require('pino');
-const qrcode = require('qrcode-terminal');
 const path = require('path');
 const fs = require('fs-extra');
 const axios = require('axios');
 const yts = require('yt-search');
 const YTDlpWrap = require('yt-dlp-wrap').default;
-const ytDlpWrap = new YTDlpWrap(); // Esto busca el binario automáticamente
+const ytDlpWrap = new YTDlpWrap();
 const fetch = require('node-fetch');
 const { getTracks } = require('spotify-url-info')(fetch);
 
-// --- CONFIGURACIÓN DE RUTAS Y LLAVES ---
-// Detecta si es Windows (.exe) o Linux (servidor)
-const isWindows = process.platform === 'win32';
+// --- CONFIGURACIÓN PARA RAILWAY (LINUX) ---
 const ffmpeg = require('ffmpeg-static');
 process.env.FFMPEG_PATH = ffmpeg;
 
