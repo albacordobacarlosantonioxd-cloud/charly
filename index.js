@@ -1,3 +1,11 @@
+const http = require('http');
+const port = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.write('Bot Maestro Online');
+    res.end();
+}).listen(port);
+
+
 const { 
     default: makeWASocket, 
     useMultiFileAuthState, 
@@ -19,16 +27,7 @@ const { getTracks } = require('spotify-url-info')(fetch);
 const ffmpeg = require('ffmpeg-static');
 process.env.FFMPEG_PATH = ffmpeg;
 
-// --- ESTO MANTIENE VIVO EL BOT EN RAILWAY ---
-const http = require('http');
-const port = process.env.PORT || 3000;
-http.createServer((req, res) => {
-    res.write('Bot Maestro Online');
-    res.end();
-}).listen(port, () => {
-    console.log(`✅ Servidor de vida escuchando en el puerto ${port}`);
-});
-// --------------------------------------------
+
 
 const MISTRAL_KEY = "asWpVr2HF48yiroZFviOGKVV0gAh0JCQ"; 
 const SYLPHY_KEY = "sylphy-ty5xtWm";
