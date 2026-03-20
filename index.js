@@ -166,26 +166,37 @@ const pushname = m.pushName || 'Usuario'; // Esto extrae el nombre de quien escr
        switch (command) {
 
 case 'audio': case 'mp3': {
-    if (!text) return sock.sendMessage(from, { text: '¿Qué rola buscamos, pariente?' });
-    await sock.sendMessage(from, { text: '⏳ Buscando y procesando audio...' });
+    if (!text) return sock.sendMessage(from, { text: '¿Qué rola buscamos, pariente? Pasa el nombre o link.' });
+    
+    await sock.sendMessage(from, { text: '🔍 *Buscando audio...* Aguanta un momento.' });
 
     try {
         const finalQuery = text.startsWith('http') ? text : `ytsearch1:${text}`;
-        // Obtenemos metadatos sin exec
-        const metadata = await ytDlpWrap.getVideoInfo([finalQuery, '--no-check-certificate']);
         
-        const vTitle = metadata.title || 'Audio';
-        const vId = metadata.id;
+        // 1. Obtener información del video usando la librería (reemplaza al exec de info)
+        let videoInfo = await ytDlpWrap.getVideoInfo([
+            finalQuery,
+            '--no-check-certificate',
+            '--dump-json'
+        ]);
+
+        if (!videoInfo) return sock.sendMessage(from, { text: '❌ No encontré la rola, intenta con otro nombre.' });
+
+        const vTitle = videoInfo.title || 'Audio';
+        const vId = videoInfo.id;
         const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 40) || 'audio';
-        const outPath = path.join(__dirname, `${Date.now()}.mp3`);
+        
+        // Ruta temporal (usamos /tmp porque Railway tiene permisos ahí)
+        const outPath = path.join('/tmp', `${Date.now()}_${vId}.mp3`);
         const thumbUrl = `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`;
 
         await sock.sendMessage(from, { 
             image: { url: thumbUrl }, 
-            caption: `✅ *Encontrado*\n📌 *Título:* ${vTitle}\n⏳ _Descargando..._`
+            caption: `✅ *Encontrado*\n📌 *Título:* ${vTitle}\n⏳ _Descargando MP3..._`
         });
 
-        // Descarga directa usando la librería
+        // 2. Descargar el audio (reemplaza al exec de download)
+        // Usamos .execPromise para esperar a que termine la descarga
         await ytDlpWrap.execPromise([
             `https://www.youtube.com/watch?v=${vId}`,
             '--no-check-certificate',
@@ -194,37 +205,60 @@ case 'audio': case 'mp3': {
             '-o', outPath
         ]);
 
+        // 3. Verificar si el archivo existe y enviarlo
         if (fs.existsSync(outPath)) {
             await sock.sendMessage(from, { 
                 audio: { url: outPath }, 
-                mimetype: 'audio/mp4', 
+                mimetype: 'audio/mp4', // Mejor compatibilidad en WhatsApp
                 fileName: `${safeTitle}.mp3`,
                 caption: `🎵 *${vTitle}*`
             }, { quoted: m });
-            
-            setTimeout(() => { if (fs.existsSync(outPath)) fs.unlinkSync(outPath); }, 30000);
+
+            // Borrado automático después de enviar
+            setTimeout(() => { 
+                if (fs.existsSync(outPath)) {
+                    try { fs.unlinkSync(outPath); } catch(e) {}
+                }
+            }, 20000);
+        } else {
+            throw new Error("El archivo no se creó correctamente");
         }
+
     } catch (e) {
-        console.error("ERROR AUDIO:", e);
-        await sock.sendMessage(from, { text: '❌ No pude bajar la rola, pariente.' });
+        console.error("ERROR EN COMANDO AUDIO:", e.message);
+        await sock.sendMessage(from, { text: '❌ Hubo un error al procesar el audio. Intenta de nuevo.' });
     }
 }
 break;
 
 case 'video': case 'mp4': {
-    if (!text) return sock.sendMessage(from, { text: '¿Qué video buscamos, pariente?' });
-    await sock.sendMessage(from, { text: '🎥 *Bajando video...*' });
+    if (!text) return sock.sendMessage(from, { text: '¿Qué video buscamos, pariente? Pasa el nombre o link.' });
+    
+    await sock.sendMessage(from, { text: '🎥 *Buscando video...* Aguanta.' });
 
     try {
         const finalQuery = text.startsWith('http') ? text : `ytsearch1:${text}`;
-        const metadata = await ytDlpWrap.getVideoInfo([finalQuery, '--no-check-certificate']);
         
-        const vTitle = metadata.title || 'Video';
-        const vId = metadata.id;
-        const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 30);
-        const outPath = path.join(__dirname, `${Date.now()}.mp4`);
+        // 1. Obtener info del video (reemplaza al exec de info)
+        let videoInfo = await ytDlpWrap.getVideoInfo([
+            finalQuery,
+            '--no-check-certificate',
+            '--dump-json'
+        ]);
 
-        // Descarga optimizada para móvil (MP4 480p)
+        if (!videoInfo) return sock.sendMessage(from, { text: '❌ No lo hallé, pariente.' });
+
+        const vTitle = videoInfo.title || 'Video';
+        const vId = videoInfo.id;
+        const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 30);
+        
+        // Usamos /tmp porque Railway permite escribir ahí sin broncas
+        const outPath = path.join('/tmp', `${Date.now()}_video.mp4`);
+
+        await sock.sendMessage(from, { text: `✅ *Encontrado:* ${vTitle}\n⏳ _Descargando video en 480p..._` });
+
+        // 2. Descargar video (reemplaza al exec de download)
+        // Mantenemos tu filtro de calidad para que sea ligero
         await ytDlpWrap.execPromise([
             `https://www.youtube.com/watch?v=${vId}`,
             '--no-check-certificate',
@@ -233,13 +267,19 @@ case 'video': case 'mp4': {
             '-o', outPath
         ]);
 
+        // 3. Verificar peso y enviar
         if (fs.existsSync(outPath)) {
             const stats = fs.statSync(outPath);
-            if (stats.size / (1024 * 1024) > 50) {
-                fs.unlinkSync(outPath);
-                return sock.sendMessage(from, { text: '⚠️ El video pesa más de 50MB. Intenta con uno más corto.' });
+            const fileSizeMB = stats.size / (1024 * 1024);
+
+            console.log(`Video listo: ${vTitle} - Peso: ${fileSizeMB.toFixed(2)} MB`);
+
+            if (fileSizeMB > 50) {
+                if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+                return sock.sendMessage(from, { text: '⚠️ El video pesa más de 50MB. WhatsApp no me deja enviarlo, busca uno más cortito.' });
             }
 
+            // Enviamos el video
             await sock.sendMessage(from, { 
                 video: { url: outPath }, 
                 caption: `✅ *${vTitle}*\n\n¡Listo tu video!`,
@@ -247,124 +287,179 @@ case 'video': case 'mp4': {
                 fileName: `${safeTitle}.mp4`
             }, { quoted: m });
 
-            setTimeout(() => { if (fs.existsSync(outPath)) fs.unlinkSync(outPath); }, 15000);
+            // Limpieza de archivo después de enviar
+            setTimeout(() => { 
+                if (fs.existsSync(outPath)) {
+                    try { fs.unlinkSync(outPath); } catch(e) {}
+                }
+            }, 20000);
+
+        } else {
+            throw new Error("No se pudo crear el archivo de video");
         }
+
     } catch (e) {
-        console.error("ERROR VIDEO:", e);
-        await sock.sendMessage(from, { text: '❌ Error al procesar el video.' });
+        console.error("ERROR EN COMANDO VIDEO:", e.message);
+        await sock.sendMessage(from, { text: '❌ Error crítico al bajar el video.' });
     }
 }
 break;
+// --- CASO PLAYLIST (SPOTIFY) ---
 case 'playlist': {
-    if (!text.includes('spotify.com')) return sock.sendMessage(from, { text: '❌ Pasa un link de Spotify válido, pariente.' });
+    if (!text.includes('spotify.com')) return sock.sendMessage(from, { text: 'Pasa un link de Spotify válido, pariente.' });
     
-    await sock.sendMessage(from, { text: '🎧 *Procesando Playlist con Sylphy API...* \nEsto puede tardar según cuántas rolas sean.' });
-
-    const apiKey = 'sylphy-ty5xtWm';
+    await sock.sendMessage(from, { text: '🎧 *Extrayendo datos de Spotify...* Aguanta un momento.' });
 
     try {
-        // 1. Llamada a la API de Sylphy
-        const response = await axios.get(`https://sylphy.xyz/download/spotify?url=${encodeURIComponent(text)}&api_key=${apiKey}`);
-        
-        // 2. Extraemos la lista de canciones (Sylphy suele devolverlo en 'result' o 'data')
-        const tracks = response.data.result || response.data.data || [];
+        // 1. Extraemos las rolas de la playlist
+        const tracks = await getTracks(text);
+        if (!tracks || tracks.length === 0) return sock.sendMessage(from, { text: '❌ No encontré canciones en esa playlist.' });
 
-        if (tracks.length === 0) {
-            return sock.sendMessage(from, { text: '❌ La API no devolvió canciones. Revisa que la playlist sea pública.' });
-        }
+        // Limitamos a 12 para no matar el servidor
+        const listaCorta = tracks.slice(0, 12); 
+        await sock.sendMessage(from, { text: `🎶 Encontré *${listaCorta.length}* temas. Los estoy bajando uno por uno...` });
 
-        // Limitamos a 10-15 para que WhatsApp no te bloquee por spam
-        const listaCorta = tracks.slice(0, 15); 
-        await sock.sendMessage(from, { text: `🎶 Encontré *${tracks.length}* canciones. Enviando las primeras 15...` });
-
-        // 3. Bucle para enviar una por una
         for (let track of listaCorta) {
             try {
-                // IMPORTANTE: Aquí usamos el link que nos da la API directamente
-                const linkDescarga = track.url || track.dl_url || track.link;
-                const titulo = track.title || track.name || "Audio de Spotify";
+                if (!track || !track.name) continue;
 
-                if (linkDescarga) {
-                    await sock.sendMessage(from, { 
-                        audio: { url: linkDescarga }, // <-- AQUÍ SE PRODUCE LA MAGIA
-                        mimetype: 'audio/mp4', 
-                        fileName: `${titulo}.mp3`,
-                        ptt: false // Cambia a true si quieres que se mande como nota de voz
-                    });
-                }
+                const artista = (track.artists && track.artists[0]) ? track.artists[0].name : '';
+                const nombreBusqueda = `${track.name} ${artista}`.trim();
+                const safeTitle = track.name.replace(/[\\/:*?"<>|]/g, "").substring(0, 40);
                 
-                // Un pequeño retraso de 2 segundos para no saturar
+                // Usamos /tmp para evitar líos de permisos en Railway
+                const outPath = path.join('/tmp', `${Date.now()}_${safeTitle}.mp3`);
+
+                // 2. Descargamos usando la librería (reemplaza al exec)
+                // Metemos el filtro de 10 minutos (600s) para evitar podcasts largos
+                await ytDlpWrap.execPromise([
+                    `ytsearch1:${nombreBusqueda}`,
+                    '--no-check-certificate',
+                    '--match-filter', 'duration <= 600',
+                    '-x',
+                    '--audio-format', 'mp3',
+                    '-o', outPath
+                ]);
+
+                // 3. Enviamos si el archivo se creó
+                if (fs.existsSync(outPath)) {
+                    await sock.sendMessage(from, { 
+                        audio: { url: outPath }, 
+                        mimetype: 'audio/mp4', 
+                        fileName: `${safeTitle}.mp3` 
+                    });
+
+                    // Borramos rápido para no llenar el disco
+                    setTimeout(() => { 
+                        if (fs.existsSync(outPath)) {
+                            try { fs.unlinkSync(outPath); } catch(e){}
+                        }
+                    }, 10000);
+                }
+
+                // --- CLAVE: Pausa de cortesía ---
+                // Esperamos 2 segundos antes de ir por la siguiente para evitar bloqueos
                 await new Promise(resolve => setTimeout(resolve, 2000));
 
-            } catch (err) {
-                console.log("Error con una rola:", err.message);
-                continue; // Si una falla, sigue con la otra
+            } catch (innerError) {
+                console.error(`Error con la rola ${track.name}:`, innerError.message);
+                continue; 
             }
         }
-
-        await sock.sendMessage(from, { text: '✅ *¡Playlist terminada!* Disfruta la música.' });
+        await sock.sendMessage(from, { text: '✅ *¡Playlist terminada!* Disfruta tus rolas. 😎' });
 
     } catch (e) {
-        console.error("ERROR SYLPHY PLAYLIST:", e.message);
-        await sock.sendMessage(from, { text: '❌ Error de conexión con la API. Intenta más tarde.' });
+        console.error("ERROR CRÍTICO SPOTIFY:", e);
+        await sock.sendMessage(from, { text: '❌ Error al procesar la playlist. Asegúrate de que sea pública.' });
     }
 }
 break;
 
 case 'album': {
-    if (!text) return sock.sendMessage(from, { text: '❌ ¿Qué álbum buscamos? Pasa el nombre, pariente.' });
+    if (!text) return sock.sendMessage(from, { text: '¿Qué álbum buscamos? Pasa el nombre del artista o del disco.' });
 
-    await sock.sendMessage(from, { text: `💿 *Buscando canciones de:* _${text}_\n⏳ _Procesando con Sylphy API..._` });
-
-    const apiKey = 'sylphy-ty5xtWm';
+    await sock.sendMessage(from, { text: `💿 *Buscando las mejores rolas de:* _${text}_\n⏳ _Filtro: Máximo 10 minutos por canción._` });
 
     try {
-        // 1. Buscamos el álbum o canciones relacionadas en YouTube vía API
-        const searchRes = await axios.get(`https://sylphy.xyz/search/yts?text=${encodeURIComponent(text)}&api_key=${apiKey}`);
-        
-        // Extraemos los resultados (usualmente vienen en .result o .data)
-        const videos = searchRes.data.result || searchRes.data.data || [];
+        // 1. Buscamos hasta 12 canciones que cumplan el filtro de duración
+        // Usamos --flat-playlist para obtener la lista rápido sin bajar nada aún
+        const playlistInfo = await ytDlpWrap.getVideoInfo([
+            `ytsearch12:${text}`,
+            '--no-check-certificate',
+            '--flat-playlist',
+            '--match-filter', 'duration <= 600',
+            '--dump-json'
+        ]);
 
-        if (videos.length === 0) {
-            return sock.sendMessage(from, { text: '❌ No encontré canciones para ese álbum.' });
+        // yt-dlp-wrap devuelve un objeto si es uno, o un string de JSONs pegados si son varios
+        // Vamos a normalizar los resultados
+        const stdout = await ytDlpWrap.execPromise([
+            `ytsearch12:${text}`,
+            '--no-check-certificate',
+            '--flat-playlist',
+            '--match-filter', 'duration <= 600',
+            '--print', '%(title)s|%(id)s'
+        ]);
+
+        if (!stdout || stdout.trim() === "") {
+            return sock.sendMessage(from, { text: '❌ No encontré canciones que pasen el filtro de 10 min.' });
         }
 
-        // 2. Tomamos los primeros 10 resultados para no saturar
-        const listaAlbum = videos.slice(0, 10);
-        await sock.sendMessage(from, { text: `🎶 Encontré *${videos.length}* temas posibles. Enviando los 10 mejores...` });
+        const canciones = stdout.split('\n').filter(l => l.includes('|'));
 
-        // 3. Bucle para pedir el link de descarga y enviar cada una
-        for (let i = 0; i < listaAlbum.length; i++) {
+        await sock.sendMessage(from, { text: `🎶 *¡Encontradas!* Bajando ${canciones.length} canciones...` });
+
+        for (let cancion of canciones) {
             try {
-                const videoUrl = listaAlbum[i].url || listaAlbum[i].link;
-                const titulo = listaAlbum[i].title || `Track ${i + 1}`;
+                const partes = cancion.split('|');
+                if (partes.length < 2) continue;
 
-                // Pedimos el link de descarga (MP3) a la API para este video
-                const resDownload = await axios.get(`https://sylphy.xyz/download/v2/ytmp3?url=${encodeURIComponent(videoUrl)}&api_key=${apiKey}`);
-                const finalUrl = resDownload.data.result?.dl_url || resDownload.data.result?.url;
+                const vTitle = partes[0].trim();
+                const vId = partes[1].trim();
+                const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 40);
+                
+                // Ruta en carpeta temporal
+                const outPath = path.join('/tmp', `${Date.now()}_${vId}.mp3`);
 
-                if (finalUrl) {
+                // 2. Descarga de la rola
+                await ytDlpWrap.execPromise([
+                    `https://www.youtube.com/watch?v=${vId}`,
+                    '--no-check-certificate',
+                    '-x',
+                    '--audio-format', 'mp3',
+                    '-o', outPath
+                ]);
+
+                // 3. Envío del audio
+                if (fs.existsSync(outPath)) {
                     await sock.sendMessage(from, { 
-                        audio: { url: finalUrl }, 
+                        audio: { url: outPath }, 
                         mimetype: 'audio/mp4', 
-                        fileName: `${titulo}.mp3`
+                        fileName: `${safeTitle}.mp3` 
                     });
+
+                    // Limpieza rápida
+                    setTimeout(() => { 
+                        if (fs.existsSync(outPath)) {
+                            try { fs.unlinkSync(outPath); } catch(e){}
+                        }
+                    }, 10000);
                 }
 
-                // Un mini respiro para que WhatsApp no se asuste
+                // Pausa para no saturar a WhatsApp ni a YouTube
                 await new Promise(resolve => setTimeout(resolve, 1500));
 
-            } catch (err) {
-                console.error(`Error en track ${i + 1}:`, err.message);
-                continue; 
+            } catch (innerError) {
+                console.error("Error bajando una rola del álbum:", innerError.message);
+                continue;
             }
         }
 
-        await sock.sendMessage(from, { text: '✅ *¡Álbum completado!* A disfrutar la música.' });
+        await sock.sendMessage(from, { text: '✅ *¡Álbum terminado!* Ya quedaron todas las que pasaron el filtro.' });
 
     } catch (e) {
-        console.error("ERROR EN ALBUM:", e.message);
-        await sock.sendMessage(from, { text: '❌ Hubo un fallo al procesar el álbum con la API.' });
+        console.error("ERROR CRÍTICO EN ÁLBUM:", e);
+        await sock.sendMessage(from, { text: '❌ Error al procesar el álbum.' });
     }
 }
 break;
@@ -626,8 +721,7 @@ break;
 
 //////////
 
-case 'ytaudio':
-case 'mp3': {
+case 'ytaudio': {
     const axios = require('axios');
     const yts = require('yt-search');
 
@@ -681,78 +775,65 @@ case 'mp3': {
 break;
 //////////
 
-case 'ytvideo': {
-    // 1. Extraemos el texto de forma segura
-    let msgText = text ? text.trim() : "";
-    if (!msgText) return await sock.sendMessage(from, { text: '❌ Pega un link de YouTube o escribe el nombre del video.' }, { quoted: m });
+case 'ytvideo': case 'video2': {
+    const axios = require('axios');
+    const yts = require('yt-search');
 
-    const apiKey = 'sylphy-ty5xtWm';
+    // 1. Extraemos el texto/query (usando args o text según tu bot)
+    const query = args.join(' ') || text; 
+    if (!query) return sock.sendMessage(from, { text: '⚠️ ¡Epa! Escribe el nombre o pega el link del video, pariente.' }, { quoted: m });
 
     try {
-        console.log(`\n[🎬] --- INICIANDO PROCESO DE VIDEO ---`);
-        let urlYt = "";
+        let videoUrl = '';
+        let videoTitle = '';
 
-        // 🔥 PASO NUEVO: Si el link es acortado, lo expandimos primero
-        if (msgText.includes('is.gd') || msgText.includes('bit.ly') || msgText.includes('t.co')) {
-            console.log(`[🔍] Detectado link acortado, expandiendo...`);
-            msgText = await expandUrl(msgText); // Usamos la función que pusiste arriba
-            console.log(`[🔗] Link real obtenido: ${msgText}`);
-        }
+        console.log(`\n[🎬] --- INICIANDO BÚSQUEDA DE VIDEO ---`);
 
-        // EXPRESIÓN REGULAR PARA DETECTAR YOUTUBE (Mejorada para capturar más formatos)
-        const ytRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/;
-        const match = msgText.match(ytRegex);
-
-        if (match) {
-            urlYt = `https://www.youtube.com/watch?v=${match[1]}`;
-            console.log(`[🔗] URL Limpia Detectada: ${urlYt}`);
+        // 1. BUSCAR EN YOUTUBE (Link o Nombre)
+        if (query.match(/(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be|youtube\.com\/shorts)\/.+/)) {
+            videoUrl = query;
+            videoTitle = 'Video de YouTube';
         } else {
-            console.log(`[🔎] Buscando por nombre o link no detectado: ${msgText}`);
-            await sock.sendMessage(from, { text: `🔍 Buscando video: *${msgText}*...` }, { quoted: m });
+            const search = await yts(query);
+            if (!search || !search.videos.length) return sock.sendMessage(from, { text: '❌ No encontré ese video, pariente.' });
             
-            const searchRes = await axios.get(`https://sylphy.xyz/search/yts?text=${encodeURIComponent(msgText)}&api_key=${apiKey}`);
-            const videos = searchRes.data.result || searchRes.data.data || (Array.isArray(searchRes.data) ? searchRes.data : []);
+            videoUrl = search.videos[0].url;
+            videoTitle = search.videos[0].title;
             
-            if (!videos || videos.length === 0) {
-                return await sock.sendMessage(from, { text: '❌ No encontré resultados para ese nombre.' }, { quoted: m });
-            }
-            
-            urlYt = videos[0].url || videos[0].link;
-            console.log(`[✅] Video Encontrado: ${videos[0].title}`);
+            await sock.sendMessage(from, { 
+                text: `🎬 *${videoTitle}*\n⏳ _Buscando video de alta calidad..._` 
+            }, { quoted: m });
         }
 
-        // 2. LLAMADA A LA API V2
-        console.log(`[⏳] Pidiendo link de descarga a la API...`);
-        const downloadUrl = `https://sylphy.xyz/download/v2/ytmp4?url=${encodeURIComponent(urlYt)}&api_key=${apiKey}`;
-        const resDownload = await axios.get(downloadUrl);
-        const res = resDownload.data;
+        // 2. LLAMADA A LA API DE SYLPHY (Endpoint de MP4)
+        const apiKey = 'sylphy-ty5xtWm';
+        // Nota: Si usas la versión 2 es /download/v2/ytmp4, si es la normal es /download/ytmp4
+        const apiUrl = `https://sylphy.xyz/download/v2/ytmp4?url=${encodeURIComponent(videoUrl)}&api_key=${apiKey}`;
 
-        // 3. EXTRAER EL LINK DIRECTO
-        let finalUrl = res.result?.dl_url || res.result?.url || res.result;
-        if (typeof finalUrl === 'object' && finalUrl !== null) {
-            finalUrl = finalUrl.dl_url || finalUrl.url;
+        const res = await axios.get(apiUrl);
+
+        // EXTRAER EL LINK DE DESCARGA (Usando la llave maestra result.dl_url)
+        const downloadUrl = res.data.result?.dl_url || res.data.result?.url;
+
+        if (!downloadUrl) {
+            console.log('--- ERROR DE ESTRUCTURA API ---', res.data);
+            return sock.sendMessage(from, { text: '❌ No pude obtener el link de descarga del video. Intenta con otro.' });
         }
 
-        if (!finalUrl || !String(finalUrl).startsWith('http')) {
-            console.log(`[🔥] ERROR: Link inválido.`, res);
-            return await sock.sendMessage(from, { text: '❌ Error: El servidor no pudo generar el link de descarga.' }, { quoted: m });
-        }
-
-        // 4. ENVÍO "VIRTUAL" (WhatsApp descarga el video directamente)
-        console.log(`[🚀] Pasándole el link a WhatsApp: ${finalUrl}`);
-        
+        // 3. ENVIAR EL VIDEO
+        // WhatsApp descarga el video desde el link de la API directamente
         await sock.sendMessage(from, { 
-            video: { url: finalUrl }, 
-            caption: `✅ *Video listo:* ${res.result?.title || 'YouTube Video'}\n🚀 _Enviado modo ultra rápido_`,
+            video: { url: downloadUrl }, 
+            caption: `✅ *Video listo:* ${videoTitle}\n🚀 _Enviado modo ultra rápido_`,
             mimetype: 'video/mp4',
-            fileName: `video.mp4`
+            fileName: `${videoTitle}.mp4`
         }, { quoted: m });
 
-        console.log(`[✨] Proceso terminado con éxito.`);
+        console.log(`[✅] Video enviado con éxito: ${videoTitle}`);
 
     } catch (e) {
         console.error("ERROR EN YTVIDEO:", e.message);
-        await sock.sendMessage(from, { text: '❌ Hubo un fallo en la conexión con el servidor de descarga.' }, { quoted: m });
+        await sock.sendMessage(from, { text: '❌ Hubo un fallo en la conexión, pariente. Intenta de nuevo.' });
     }
 }
 break;
