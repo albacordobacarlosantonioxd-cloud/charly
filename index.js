@@ -173,10 +173,11 @@ case 'audio': case 'mp3': {
     try {
         const finalQuery = text.startsWith('http') ? text : `ytsearch1:${text}`;
         
-        // 1. Obtener información del video usando la librería (reemplaza al exec de info)
+        // 1. Obtener información del video usando cookies para saltar el bot check
         let videoInfo = await ytDlpWrap.getVideoInfo([
             finalQuery,
             '--no-check-certificate',
+            '--cookies', './cookies.txt', // 👈 Uso de cookies en la búsqueda
             '--dump-json'
         ]);
 
@@ -186,20 +187,20 @@ case 'audio': case 'mp3': {
         const vId = videoInfo.id;
         const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 40) || 'audio';
         
-        // Ruta temporal (usamos /tmp porque Railway tiene permisos ahí)
+        // Ruta temporal en /tmp (ideal para Railway)
         const outPath = path.join('/tmp', `${Date.now()}_${vId}.mp3`);
         const thumbUrl = `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`;
 
         await sock.sendMessage(from, { 
             image: { url: thumbUrl }, 
-            caption: `✅ *Encontrado*\n📌 *Título:* ${vTitle}\n⏳ _Descargando MP3..._`
+            caption: `✅ *Encontrado*\n📌 *Título:* ${vTitle}\n⏳ _Descargando MP3 con credenciales..._`
         });
 
-        // 2. Descargar el audio (reemplaza al exec de download)
-        // Usamos .execPromise para esperar a que termine la descarga
+        // 2. Descargar el audio usando cookies
         await ytDlpWrap.execPromise([
             `https://www.youtube.com/watch?v=${vId}`,
             '--no-check-certificate',
+            '--cookies', './cookies.txt', // 👈 Uso de cookies en la descarga
             '-x',
             '--audio-format', 'mp3',
             '-o', outPath
@@ -209,12 +210,12 @@ case 'audio': case 'mp3': {
         if (fs.existsSync(outPath)) {
             await sock.sendMessage(from, { 
                 audio: { url: outPath }, 
-                mimetype: 'audio/mp4', // Mejor compatibilidad en WhatsApp
+                mimetype: 'audio/mp4', // MP4 es más compatible para audios en WhatsApp
                 fileName: `${safeTitle}.mp3`,
                 caption: `🎵 *${vTitle}*`
             }, { quoted: m });
 
-            // Borrado automático después de enviar
+            // Borrado automático para no saturar el almacenamiento de Railway
             setTimeout(() => { 
                 if (fs.existsSync(outPath)) {
                     try { fs.unlinkSync(outPath); } catch(e) {}
@@ -226,7 +227,11 @@ case 'audio': case 'mp3': {
 
     } catch (e) {
         console.error("ERROR EN COMANDO AUDIO:", e.message);
-        await sock.sendMessage(from, { text: '❌ Hubo un error al procesar el audio. Intenta de nuevo.' });
+        // Mensaje de ayuda si las cookies fallan o caducan
+        const errorMsg = e.message.includes('Sign in') 
+            ? '❌ YouTube bloqueó el acceso. Es posible que las cookies hayan caducado.' 
+            : '❌ Hubo un error al procesar el audio. Intenta de nuevo.';
+        await sock.sendMessage(from, { text: errorMsg });
     }
 }
 break;
@@ -239,10 +244,11 @@ case 'video': case 'mp4': {
     try {
         const finalQuery = text.startsWith('http') ? text : `ytsearch1:${text}`;
         
-        // 1. Obtener info del video (reemplaza al exec de info)
+        // 1. Obtener info del video usando cookies
         let videoInfo = await ytDlpWrap.getVideoInfo([
             finalQuery,
             '--no-check-certificate',
+            '--cookies', './cookies.txt', // 👈 Bypass con cookies
             '--dump-json'
         ]);
 
@@ -252,16 +258,16 @@ case 'video': case 'mp4': {
         const vId = videoInfo.id;
         const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 30);
         
-        // Usamos /tmp porque Railway permite escribir ahí sin broncas
+        // Usamos /tmp para Railway
         const outPath = path.join('/tmp', `${Date.now()}_video.mp4`);
 
-        await sock.sendMessage(from, { text: `✅ *Encontrado:* ${vTitle}\n⏳ _Descargando video en 480p..._` });
+        await sock.sendMessage(from, { text: `✅ *Encontrado:* ${vTitle}\n⏳ _Descargando video en 480p con credenciales..._` });
 
-        // 2. Descargar video (reemplaza al exec de download)
-        // Mantenemos tu filtro de calidad para que sea ligero
+        // 2. Descargar video usando cookies
         await ytDlpWrap.execPromise([
             `https://www.youtube.com/watch?v=${vId}`,
             '--no-check-certificate',
+            '--cookies', './cookies.txt', // 👈 Bypass con cookies
             '-f', 'mp4[height<=480]/best[height<=480][ext=mp4]/best[ext=mp4]/best',
             '--merge-output-format', 'mp4',
             '-o', outPath
@@ -287,7 +293,7 @@ case 'video': case 'mp4': {
                 fileName: `${safeTitle}.mp4`
             }, { quoted: m });
 
-            // Limpieza de archivo después de enviar
+            // Limpieza de archivo
             setTimeout(() => { 
                 if (fs.existsSync(outPath)) {
                     try { fs.unlinkSync(outPath); } catch(e) {}
@@ -300,7 +306,10 @@ case 'video': case 'mp4': {
 
     } catch (e) {
         console.error("ERROR EN COMANDO VIDEO:", e.message);
-        await sock.sendMessage(from, { text: '❌ Error crítico al bajar el video.' });
+        const errorMsg = e.message.includes('Sign in') 
+            ? '❌ YouTube detectó el servidor. Verifica que tus cookies no hayan caducado.' 
+            : '❌ Error crítico al bajar el video.';
+        await sock.sendMessage(from, { text: errorMsg });
     }
 }
 break;
@@ -315,9 +324,9 @@ case 'playlist': {
         const tracks = await getTracks(text);
         if (!tracks || tracks.length === 0) return sock.sendMessage(from, { text: '❌ No encontré canciones en esa playlist.' });
 
-        // Limitamos a 12 para no matar el servidor
+        // Limitamos a 12 para que Railway no se canse
         const listaCorta = tracks.slice(0, 12); 
-        await sock.sendMessage(from, { text: `🎶 Encontré *${listaCorta.length}* temas. Los estoy bajando uno por uno...` });
+        await sock.sendMessage(from, { text: `🎶 Encontré *${listaCorta.length}* temas. Los estoy bajando con credenciales para evitar bloqueos...` });
 
         for (let track of listaCorta) {
             try {
@@ -327,21 +336,21 @@ case 'playlist': {
                 const nombreBusqueda = `${track.name} ${artista}`.trim();
                 const safeTitle = track.name.replace(/[\\/:*?"<>|]/g, "").substring(0, 40);
                 
-                // Usamos /tmp para evitar líos de permisos en Railway
+                // Ruta en /tmp
                 const outPath = path.join('/tmp', `${Date.now()}_${safeTitle}.mp3`);
 
-                // 2. Descargamos usando la librería (reemplaza al exec)
-                // Metemos el filtro de 10 minutos (600s) para evitar podcasts largos
+                // 2. Descargamos usando cookies y filtro de duración
                 await ytDlpWrap.execPromise([
                     `ytsearch1:${nombreBusqueda}`,
                     '--no-check-certificate',
+                    '--cookies', './cookies.txt', // 👈 Bypass de YouTube para playlists
                     '--match-filter', 'duration <= 600',
                     '-x',
                     '--audio-format', 'mp3',
                     '-o', outPath
                 ]);
 
-                // 3. Enviamos si el archivo se creó
+                // 3. Enviamos si el archivo se creó con éxito
                 if (fs.existsSync(outPath)) {
                     await sock.sendMessage(from, { 
                         audio: { url: outPath }, 
@@ -349,7 +358,7 @@ case 'playlist': {
                         fileName: `${safeTitle}.mp3` 
                     });
 
-                    // Borramos rápido para no llenar el disco
+                    // Limpieza inmediata para cuidar el espacio en disco
                     setTimeout(() => { 
                         if (fs.existsSync(outPath)) {
                             try { fs.unlinkSync(outPath); } catch(e){}
@@ -357,20 +366,20 @@ case 'playlist': {
                     }, 10000);
                 }
 
-                // --- CLAVE: Pausa de cortesía ---
-                // Esperamos 2 segundos antes de ir por la siguiente para evitar bloqueos
+                // Pausa de 2 segundos para que YouTube no nos marque como spam
                 await new Promise(resolve => setTimeout(resolve, 2000));
 
             } catch (innerError) {
                 console.error(`Error con la rola ${track.name}:`, innerError.message);
+                // Si una falla por cookies o copyright, seguimos con la siguiente
                 continue; 
             }
         }
-        await sock.sendMessage(from, { text: '✅ *¡Playlist terminada!* Disfruta tus rolas. 😎' });
+        await sock.sendMessage(from, { text: '✅ *¡Playlist terminada!* Ya quedaron tus rolas, pariente. 😎' });
 
     } catch (e) {
         console.error("ERROR CRÍTICO SPOTIFY:", e);
-        await sock.sendMessage(from, { text: '❌ Error al procesar la playlist. Asegúrate de que sea pública.' });
+        await sock.sendMessage(from, { text: '❌ Error al procesar la playlist. Asegúrate de que las cookies estén vigentes.' });
     }
 }
 break;
@@ -381,21 +390,21 @@ case 'album': {
     await sock.sendMessage(from, { text: `💿 *Buscando las mejores rolas de:* _${text}_\n⏳ _Filtro: Máximo 10 minutos por canción._` });
 
     try {
-        // 1. Buscamos hasta 12 canciones que cumplan el filtro de duración
-        // Usamos --flat-playlist para obtener la lista rápido sin bajar nada aún
+        // 1. Buscamos hasta 12 canciones usando cookies para evitar el bloqueo inicial
         const playlistInfo = await ytDlpWrap.getVideoInfo([
             `ytsearch12:${text}`,
             '--no-check-certificate',
+            '--cookies', './cookies.txt', // 👈 Bypass con cookies
             '--flat-playlist',
             '--match-filter', 'duration <= 600',
             '--dump-json'
         ]);
 
-        // yt-dlp-wrap devuelve un objeto si es uno, o un string de JSONs pegados si son varios
-        // Vamos a normalizar los resultados
+        // Obtenemos la lista de títulos e IDs con credenciales
         const stdout = await ytDlpWrap.execPromise([
             `ytsearch12:${text}`,
             '--no-check-certificate',
+            '--cookies', './cookies.txt', // 👈 Bypass con cookies
             '--flat-playlist',
             '--match-filter', 'duration <= 600',
             '--print', '%(title)s|%(id)s'
@@ -407,7 +416,7 @@ case 'album': {
 
         const canciones = stdout.split('\n').filter(l => l.includes('|'));
 
-        await sock.sendMessage(from, { text: `🎶 *¡Encontradas!* Bajando ${canciones.length} canciones...` });
+        await sock.sendMessage(from, { text: `🎶 *¡Encontradas!* Bajando ${canciones.length} canciones con credenciales...` });
 
         for (let cancion of canciones) {
             try {
@@ -418,13 +427,14 @@ case 'album': {
                 const vId = partes[1].trim();
                 const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 40);
                 
-                // Ruta en carpeta temporal
+                // Ruta en carpeta temporal /tmp para Railway
                 const outPath = path.join('/tmp', `${Date.now()}_${vId}.mp3`);
 
-                // 2. Descarga de la rola
+                // 2. Descarga de la rola individual usando cookies
                 await ytDlpWrap.execPromise([
                     `https://www.youtube.com/watch?v=${vId}`,
                     '--no-check-certificate',
+                    '--cookies', './cookies.txt', // 👈 Bypass con cookies
                     '-x',
                     '--audio-format', 'mp3',
                     '-o', outPath
@@ -438,7 +448,7 @@ case 'album': {
                         fileName: `${safeTitle}.mp3` 
                     });
 
-                    // Limpieza rápida
+                    // Limpieza rápida de archivos temporales
                     setTimeout(() => { 
                         if (fs.existsSync(outPath)) {
                             try { fs.unlinkSync(outPath); } catch(e){}
@@ -446,7 +456,7 @@ case 'album': {
                     }, 10000);
                 }
 
-                // Pausa para no saturar a WhatsApp ni a YouTube
+                // Pausa de 1.5s para no saturar la conexión
                 await new Promise(resolve => setTimeout(resolve, 1500));
 
             } catch (innerError) {
@@ -455,11 +465,14 @@ case 'album': {
             }
         }
 
-        await sock.sendMessage(from, { text: '✅ *¡Álbum terminado!* Ya quedaron todas las que pasaron el filtro.' });
+        await sock.sendMessage(from, { text: '✅ *¡Álbum terminado!* Ya quedaron todas las que pasaron el filtro. 😎' });
 
     } catch (e) {
         console.error("ERROR CRÍTICO EN ÁLBUM:", e);
-        await sock.sendMessage(from, { text: '❌ Error al procesar el álbum.' });
+        const errorMsg = e.message.includes('Sign in') 
+            ? '❌ YouTube bloqueó la búsqueda masiva. Revisa si tus cookies siguen activas.' 
+            : '❌ Error al procesar el álbum.';
+        await sock.sendMessage(from, { text: errorMsg });
     }
 }
 break;
