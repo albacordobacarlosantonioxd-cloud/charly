@@ -164,117 +164,120 @@ const pushname = m.pushName || 'Usuario'; // Esto extrae el nombre de quien escr
 
 
        switch (command) {
-case 'audio': case 'mp3': {
-    if (!text) return sock.sendMessage(from, { text: '¿Qué rola buscamos? Pasa el nombre o link.' });
-    await sock.sendMessage(from, { text: '🎶 *Buscando audio...* Aguanta.' });
 
-    try {
-        const yts = require('yt-search');
-        const axios = require('axios');
-        
-        // Buscamos el video primero para tener el link real
-        const search = await yts(text);
-        if (!search || !search.videos.length) return sock.sendMessage(from, { text: '❌ No hallé la rola.' });
-        const video = search.videos[0];
-
-        // Llamada a la API de Sylphy
-        const res = await axios.get(`https://sylphy.xyz/download/ytmp3?url=${encodeURIComponent(video.url)}&api_key=sylphy-ty5xtWm`);
-        const dl_url = res.data.result?.dl_url;
-
-        if (!dl_url) throw new Error("No se obtuvo link de descarga");
-
-        await sock.sendMessage(from, { 
-            audio: { url: dl_url }, 
-            mimetype: 'audio/mp4', 
-            fileName: `${video.title}.mp3` 
-        }, { quoted: m });
-
-    } catch (e) {
-        console.error(e);
-        await sock.sendMessage(from, { text: '❌ Error al procesar audio con la API.' });
-    }
-}
-break;
-
-case 'video': case 'mp4': {
-    if (!text) return sock.sendMessage(from, { text: '¿Qué video buscamos?' });
-    await sock.sendMessage(from, { text: '🎥 *Buscando video...*' });
-
-    try {
-        const yts = require('yt-search');
-        const axios = require('axios');
-        
-        const search = await yts(text);
-        const video = search.videos[0];
-
-        // API para MP4
-        const res = await axios.get(`https://sylphy.xyz/download/ytmp4?url=${encodeURIComponent(video.url)}&api_key=sylphy-ty5xtWm`);
-        const dl_url = res.data.result?.dl_url;
-
-        await sock.sendMessage(from, { 
-            video: { url: dl_url }, 
-            caption: `✅ *${video.title}*`,
-            mimetype: 'video/mp4'
-        }, { quoted: m });
-
-    } catch (e) {
-        await sock.sendMessage(from, { text: '❌ Error al bajar el video.' });
-    }
-}
-break;
 
 case 'playlist': {
-    if (!text.includes('spotify.com')) return sock.sendMessage(from, { text: 'Pasa un link de Spotify, pariente.' });
-    await sock.sendMessage(from, { text: '🎧 *Preparando playlist...*' });
+    if (!text.includes('spotify.com')) return sock.sendMessage(from, { text: 'Pasa un link de Spotify válido, pariente.' });
+    
+    await sock.sendMessage(from, { text: '🎧 *Procesando Playlist de Spotify...* Aguanta un momento.' });
 
     try {
         const axios = require('axios');
+        const apiKey = 'sylphy-ty5xtWm';
+
+        // 1. Usamos tu función getTracks para obtener la lista de nombres/artistas
         const tracks = await getTracks(text);
-        const lista = tracks.slice(0, 10); // Límite de 10 para no saturar
+        if (!tracks || tracks.length === 0) return sock.sendMessage(from, { text: '❌ No pude extraer canciones de ese link.' });
 
-        for (let track of lista) {
+        // Limitamos a 10 para que la API no nos bloquee por exceso de peticiones
+        const listaCorta = tracks.slice(0, 10); 
+        await sock.sendMessage(from, { text: `🎶 Encontré *${listaCorta.length}* temas. Bajando directamente de Spotify...` });
+
+        for (let track of listaCorta) {
             try {
-                const query = `${track.name} ${track.artists[0].name}`;
-                // Buscamos el link de YT para la API
-                const yts = require('yt-search');
-                const s = await yts(query);
-                const vUrl = s.videos[0].url;
+                // Verificamos que el track tenga el formato correcto (depende de tu función getTracks)
+                // Usualmente getTracks devuelve objetos con .external_urls.spotify
+                const trackUrl = track.external_urls?.spotify || track.url; 
+                
+                if (!trackUrl) continue;
 
-                const res = await axios.get(`https://sylphy.xyz/download/ytmp3?url=${encodeURIComponent(vUrl)}&api_key=sylphy-ty5xtWm`);
-                if (res.data.result?.dl_url) {
-                    await sock.sendMessage(from, { audio: { url: res.data.result.dl_url }, mimetype: 'audio/mp4', fileName: `${track.name}.mp3` });
+                // 2. Llamada directa a la API de Spotify de Sylphy
+                const res = await axios.get(`https://sylphy.xyz/download/spotify?url=${encodeURIComponent(trackUrl)}&api_key=${apiKey}`);
+                
+                const dl_url = res.data.result?.dl_url;
+                const title = track.name || 'Audio';
+
+                if (dl_url) {
+                    await sock.sendMessage(from, { 
+                        audio: { url: dl_url }, 
+                        mimetype: 'audio/mp4', 
+                        fileName: `${title}.mp3` 
+                    });
                 }
-                await new Promise(r => setTimeout(r, 2000)); // Pausa de seguridad
-            } catch (e) { continue; }
+
+                // Pausa de 2.5 segundos para no saturar la API
+                await new Promise(r => setTimeout(r, 2500));
+
+            } catch (innerError) {
+                console.error(`Error bajando track:`, innerError.message);
+                continue; // Si una falla, que siga con la otra
+            }
         }
-        await sock.sendMessage(from, { text: '✅ Playlist terminada.' });
+
+        await sock.sendMessage(from, { text: '✅ *¡Playlist completada!* Disfruta tus rolas.' });
+
     } catch (e) {
-        await sock.sendMessage(from, { text: '❌ Error en Playlist.' });
+        console.error("ERROR CRÍTICO EN PLAYLIST:", e);
+        await sock.sendMessage(from, { text: '❌ Hubo un fallo al conectar con la API de Spotify.' });
     }
 }
 break;
 
 case 'album': {
-    if (!text) return sock.sendMessage(from, { text: '¿De quién buscamos el álbum?' });
+    if (!text) return sock.sendMessage(from, { text: '¿De quién buscamos el álbum, pariente? Pasa el nombre del artista o disco.' });
+
     try {
         const yts = require('yt-search');
         const axios = require('axios');
-        const search = await yts(text);
-        const canciones = search.videos.slice(0, 8);
 
-        await sock.sendMessage(from, { text: `💿 Bajando ${canciones.length} rolas...` });
+        // Buscamos los videos
+        const search = await yts(text);
+        if (!search || !search.videos || search.videos.length === 0) {
+            return sock.sendMessage(from, { text: '❌ No encontré canciones para ese álbum.' });
+        }
+
+        // Tomamos máximo 8 para no saturar la API ni el bot
+        const canciones = search.videos.slice(0, 8);
+        await sock.sendMessage(from, { text: `💿 Encontré *${canciones.length}* rolas. Las estoy preparando...` });
 
         for (let v of canciones) {
             try {
-                const res = await axios.get(`https://sylphy.xyz/download/ytmp3?url=${encodeURIComponent(v.url)}&api_key=sylphy-ty5xtWm`);
-                if (res.data.result?.dl_url) {
-                    await sock.sendMessage(from, { audio: { url: res.data.result.dl_url }, mimetype: 'audio/mp4', fileName: `${v.title}.mp3` });
+                // Verificamos que tengamos URL
+                if (!v.url) continue;
+
+                // Llamada a la API de Sylphy
+                const apiUrl = `https://sylphy.xyz/download/ytmp3?url=${encodeURIComponent(v.url)}&api_key=sylphy-ty5xtWm`;
+                const res = await axios.get(apiUrl);
+
+                // Validamos que la API nos de un resultado positivo
+                if (res.data && res.data.result && res.data.result.dl_url) {
+                    const dl_url = res.data.result.dl_url;
+                    const cleanTitle = v.title.replace(/[\\/:*?"<>|]/g, "").substring(0, 30);
+
+                    await sock.sendMessage(from, { 
+                        audio: { url: dl_url }, 
+                        mimetype: 'audio/mp4', 
+                        fileName: `${cleanTitle}.mp3`,
+                        ptt: false // Cambia a true si quieres que se mande como nota de voz
+                    });
+                } else {
+                    console.log(`⚠️ API no pudo procesar: ${v.title}`);
                 }
-                await new Promise(r => setTimeout(r, 2000));
-            } catch (e) { continue; }
+
+                // Pausa de 2.5 segundos (importante para que la API no te bloquee por spam)
+                await new Promise(r => setTimeout(r, 2500));
+
+            } catch (innerError) {
+                console.error(`Error procesando rola "${v.title}":`, innerError.message);
+                continue; // Si una falla, pasamos a la siguiente
+            }
         }
+
+        await sock.sendMessage(from, { text: '✅ *¡Álbum terminado!* Disfruta la música, pariente.' });
+
     } catch (e) {
-        await sock.sendMessage(from, { text: '❌ Error en Álbum.' });
+        console.error("ERROR CRÍTICO EN ÁLBUM:", e);
+        await sock.sendMessage(from, { text: '❌ Hubo un error crítico al procesar el álbum.' });
     }
 }
 break;
@@ -537,7 +540,7 @@ break;
 
 //////////
 
-case 'ytaudio': {
+case 'ytaudio': case 'audio':  {
     const axios = require('axios');
     const yts = require('yt-search');
 
@@ -591,7 +594,7 @@ case 'ytaudio': {
 break;
 //////////
 
-case 'ytvideo': case 'video2': {
+case 'ytvideo': case 'video': {
     const axios = require('axios');
     const yts = require('yt-search');
 
