@@ -1,35 +1,25 @@
-# 1. Usamos una imagen de Node.js ligera pero completa
-# 1. Cambiamos de node:18 a node:20
+# 1. Usamos la imagen oficial de Node.js (versión 20 es la más estable)
 FROM node:20-bullseye
 
-# 1. Instalamos herramientas del sistema (ffmpeg y python)
+# 2. Instalamos FFmpeg (necesario para que WhatsApp procese bien los audios/videos)
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    python3 \
-    python3-pip \
-    wget \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. INSTALACIÓN CRÍTICA: yt-dlp actualizado (La clave para evitar errores 403)
-# Descargamos el binario directamente de su GitHub oficial
-RUN wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -O /usr/local/bin/yt-dlp && \
-    chmod a+rx /usr/local/bin/yt-dlp
-
-# 3. Verificamos que todo esté en orden
-RUN yt-dlp --version
-RUN ffmpeg -version
-# 4. Preparamos la carpeta de la app
+# 3. Creamos la carpeta de la app
 WORKDIR /app
 
-# 5. Copiamos solo los archivos de dependencias primero (para que sea más rápido)
+# 4. Copiamos los archivos de dependencias primero para acelerar el build
 COPY package*.json ./
-RUN npm install
 
-# 6. Copiamos el resto de tu código
+# 5. Instalamos solo las librerías necesarias (axios, yt-search, etc.)
+RUN npm install --production
+
+# 6. Copiamos todo el código de tu bot al contenedor
 COPY . .
 
-# 7. Exponemos el puerto para Railway
+# 7. Exponemos el puerto que usa Railway (usualmente el 3000)
 EXPOSE 3000
 
 # 8. Comando para arrancar el bot
