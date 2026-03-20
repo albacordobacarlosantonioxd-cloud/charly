@@ -165,239 +165,120 @@ const pushname = m.pushName || 'Usuario'; // Esto extrae el nombre de quien escr
 
        switch (command) {
 case 'audio': case 'mp3': {
-    if (!text) return sock.sendMessage(from, { text: '¿Qué rola buscamos, pariente? Pasa el nombre o link.' });
-    
-    await sock.sendMessage(from, { text: '🔍 *Buscando audio...* Aguanta un momento.' });
+    if (!text) return sock.sendMessage(from, { text: '¿Qué rola buscamos? Pasa el nombre o link.' });
+    await sock.sendMessage(from, { text: '🎶 *Buscando audio...* Aguanta.' });
 
     try {
-        const finalQuery = text.startsWith('http') ? text : `ytsearch1:${text}`;
+        const yts = require('yt-search');
+        const axios = require('axios');
         
-        // 1. Obtener info con los refuerzos que ya pusimos
-let videoInfo = await ytDlpWrap.getVideoInfo([
-    finalQuery,
-    '--no-check-certificate',
-    '--cookies', './cookies.txt',
-    '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-    '--extractor-args', 'youtube:player_client=ios,web',
-    '--dump-json'
-]);
+        // Buscamos el video primero para tener el link real
+        const search = await yts(text);
+        if (!search || !search.videos.length) return sock.sendMessage(from, { text: '❌ No hallé la rola.' });
+        const video = search.videos[0];
 
-// --- ESTA ES LA PROTECCIÓN ---
-if (!videoInfo || !videoInfo.id) {
-    console.log("DEBUG - Info recibida:", videoInfo); // Para que lo veas en los logs de Railway
-    return sock.sendMessage(from, { text: '❌ No pude obtener los detalles del video. Intenta con un link directo o revisa tus cookies.' });
-}
+        // Llamada a la API de Sylphy
+        const res = await axios.get(`https://sylphy.xyz/download/ytmp3?url=${encodeURIComponent(video.url)}&api_key=sylphy-ty5xtWm`);
+        const dl_url = res.data.result?.dl_url;
 
-const vId = videoInfo.id; // Ahora sí estamos seguros de que existe
-const vTitle = videoInfo.title || 'Audio/Video';
-const thumbUrl = `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`;
-// -----------------------------
+        if (!dl_url) throw new Error("No se obtuvo link de descarga");
 
         await sock.sendMessage(from, { 
-            image: { url: thumbUrl }, 
-            caption: `✅ *Encontrado*\n📌 *Título:* ${vTitle}\n⏳ _Descargando (Bypass 403)..._`
-        });
-
-        // 2. Descargar con los mismos refuerzos
-        await ytDlpWrap.execPromise([
-            `https://www.youtube.com/watch?v=${vId}`,
-            '--no-check-certificate',
-            '--cookies', './cookies.txt',
-            '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-            '--extractor-args', 'youtube:player_client=ios,web', // 👈 INDISPENSABLE AQUÍ TAMBIÉN
-            '-x',
-            '--audio-format', 'mp3',
-            '-o', outPath
-        ]);
-
-        if (fs.existsSync(outPath)) {
-            await sock.sendMessage(from, { 
-                audio: { url: outPath }, 
-                mimetype: 'audio/mp4', 
-                fileName: `${safeTitle}.mp3`
-            }, { quoted: m });
-
-            setTimeout(() => { 
-                if (fs.existsSync(outPath)) {
-                    try { fs.unlinkSync(outPath); } catch(e) {}
-                }
-            }, 20000);
-        } else {
-            throw new Error("El archivo no se creó. Posible bloqueo de IP.");
-        }
+            audio: { url: dl_url }, 
+            mimetype: 'audio/mp4', 
+            fileName: `${video.title}.mp3` 
+        }, { quoted: m });
 
     } catch (e) {
-        console.error("ERROR DETALLADO:", e.message);
-        
-        // Si sigue fallando, es que tus COOKIES ya están quemadas
-        if (e.message.includes('403')) {
-            await sock.sendMessage(from, { text: '❌ Error 403: YouTube bloqueó la descarga. Necesito cookies nuevas, pariente.' });
-        } else {
-            await sock.sendMessage(from, { text: '❌ Hubo un error al procesar el audio. Intenta de nuevo.' });
-        }
+        console.error(e);
+        await sock.sendMessage(from, { text: '❌ Error al procesar audio con la API.' });
     }
 }
 break;
 
 case 'video': case 'mp4': {
-    if (!text) return sock.sendMessage(from, { text: '¿Qué video buscamos, pariente? Pasa el nombre o link.' });
-    await sock.sendMessage(from, { text: '🎥 *Buscando video...* Aguanta.' });
+    if (!text) return sock.sendMessage(from, { text: '¿Qué video buscamos?' });
+    await sock.sendMessage(from, { text: '🎥 *Buscando video...*' });
 
     try {
-        const finalQuery = text.startsWith('http') ? text : `ytsearch1:${text}`;
+        const yts = require('yt-search');
+        const axios = require('axios');
         
-       // 1. Obtener info del video con los refuerzos
-        let videoInfo;
-        try {
-            videoInfo = await ytDlpWrap.getVideoInfo([
-                finalQuery,
-                '--no-check-certificate',
-                '--cookies', './cookies.txt',
-                '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-                '--extractor-args', 'youtube:player_client=ios,web',
-                '--dump-json'
-            ]);
-        } catch (err) {
-            console.error("ERROR AL OBTENER INFO:", err.message);
-            return sock.sendMessage(from, { text: '❌ YouTube bloqueó la búsqueda. Revisa tus cookies, pariente.' });
-        }
+        const search = await yts(text);
+        const video = search.videos[0];
 
-        // --- VALIDACIÓN DE ID (Evita el error de 'undefined') ---
-        if (!videoInfo || !videoInfo.id) {
-            console.log("DEBUG - Estructura de videoInfo fallida:", videoInfo);
-            return sock.sendMessage(from, { text: '❌ No pude extraer los datos del video. Intenta con un link directo.' });
-        }
+        // API para MP4
+        const res = await axios.get(`https://sylphy.xyz/download/ytmp4?url=${encodeURIComponent(video.url)}&api_key=sylphy-ty5xtWm`);
+        const dl_url = res.data.result?.dl_url;
 
-        const vId = videoInfo.id; 
-        const vTitle = videoInfo.title || 'Video';
-        const safeTitle = vTitle.replace(/[\\/:*?"<>|]/g, "").substring(0, 30);
-        const outPath = path.join('/tmp', `${Date.now()}_video.mp4`);
-        const thumbUrl = `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`; // Ahora sí, vId está garantizado;
+        await sock.sendMessage(from, { 
+            video: { url: dl_url }, 
+            caption: `✅ *${video.title}*`,
+            mimetype: 'video/mp4'
+        }, { quoted: m });
 
-        await sock.sendMessage(from, { text: `✅ *Encontrado:* ${vTitle}\n⏳ _Descargando (Bypass 403)..._` });
-
-        await ytDlpWrap.execPromise([
-            `https://www.youtube.com/watch?v=${vId}`,
-            '--no-check-certificate',
-            '--cookies', './cookies.txt',
-            '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-            '--extractor-args', 'youtube:player_client=ios,web',
-            '-f', 'mp4[height<=480]/best[height<=480][ext=mp4]/best[ext=mp4]/best',
-            '--merge-output-format', 'mp4',
-            '-o', outPath
-        ]);
-
-        if (fs.existsSync(outPath)) {
-            const stats = fs.statSync(outPath);
-            if (stats.size / (1024 * 1024) > 50) {
-                if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
-                return sock.sendMessage(from, { text: '⚠️ El video pesa más de 50MB. Busca uno más corto.' });
-            }
-
-            await sock.sendMessage(from, { 
-                video: { url: outPath }, 
-                caption: `✅ *${vTitle}*`,
-                mimetype: 'video/mp4',
-                fileName: `${safeTitle}.mp4`
-            }, { quoted: m });
-
-            setTimeout(() => { if (fs.existsSync(outPath)) try { fs.unlinkSync(outPath); } catch(e){} }, 20000);
-        }
     } catch (e) {
-        console.error("ERROR VIDEO:", e.message);
-        await sock.sendMessage(from, { text: '❌ Error 403 o fallo de red al bajar el video.' });
+        await sock.sendMessage(from, { text: '❌ Error al bajar el video.' });
     }
 }
 break;
-// --- CASO PLAYLIST (SPOTIFY) ---
+
 case 'playlist': {
-    if (!text.includes('spotify.com')) return sock.sendMessage(from, { text: 'Pasa un link de Spotify válido.' });
-    await sock.sendMessage(from, { text: '🎧 *Extrayendo datos de Spotify...*' });
+    if (!text.includes('spotify.com')) return sock.sendMessage(from, { text: 'Pasa un link de Spotify, pariente.' });
+    await sock.sendMessage(from, { text: '🎧 *Preparando playlist...*' });
 
     try {
+        const axios = require('axios');
         const tracks = await getTracks(text);
-        if (!tracks || tracks.length === 0) return sock.sendMessage(from, { text: '❌ Playlist vacía o privada.' });
+        const lista = tracks.slice(0, 10); // Límite de 10 para no saturar
 
-        const listaCorta = tracks.slice(0, 12); 
-        await sock.sendMessage(from, { text: `🎶 Bajando *${listaCorta.length}* temas con bypass anti-bloqueo...` });
-
-        for (let track of listaCorta) {
+        for (let track of lista) {
             try {
-                const nombreBusqueda = `${track.name} ${track.artists[0]?.name || ''}`.trim();
-                const outPath = path.join('/tmp', `${Date.now()}_temp.mp3`);
+                const query = `${track.name} ${track.artists[0].name}`;
+                // Buscamos el link de YT para la API
+                const yts = require('yt-search');
+                const s = await yts(query);
+                const vUrl = s.videos[0].url;
 
-                await ytDlpWrap.execPromise([
-                    `ytsearch1:${nombreBusqueda}`,
-                    '--no-check-certificate',
-                    '--cookies', './cookies.txt',
-                    '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-                    '--extractor-args', 'youtube:player_client=ios,web',
-                    '--match-filter', 'duration <= 600',
-                    '-x', '--audio-format', 'mp3',
-                    '-o', outPath
-                ]);
-
-                if (fs.existsSync(outPath)) {
-                    await sock.sendMessage(from, { audio: { url: outPath }, mimetype: 'audio/mp4', fileName: `${track.name}.mp3` });
-                    setTimeout(() => { if (fs.existsSync(outPath)) try { fs.unlinkSync(outPath); } catch(e){} }, 10000);
+                const res = await axios.get(`https://sylphy.xyz/download/ytmp3?url=${encodeURIComponent(vUrl)}&api_key=sylphy-ty5xtWm`);
+                if (res.data.result?.dl_url) {
+                    await sock.sendMessage(from, { audio: { url: res.data.result.dl_url }, mimetype: 'audio/mp4', fileName: `${track.name}.mp3` });
                 }
-                await new Promise(r => setTimeout(r, 2000)); // Pausa anti-spam
+                await new Promise(r => setTimeout(r, 2000)); // Pausa de seguridad
             } catch (e) { continue; }
         }
-        await sock.sendMessage(from, { text: '✅ *¡Playlist terminada!*' });
+        await sock.sendMessage(from, { text: '✅ Playlist terminada.' });
     } catch (e) {
-        await sock.sendMessage(from, { text: '❌ Error crítico en Playlist.' });
+        await sock.sendMessage(from, { text: '❌ Error en Playlist.' });
     }
 }
 break;
 
 case 'album': {
-    if (!text) return sock.sendMessage(from, { text: '¿Qué álbum buscamos?' });
-    await sock.sendMessage(from, { text: `💿 *Buscando:* _${text}_` });
-
+    if (!text) return sock.sendMessage(from, { text: '¿De quién buscamos el álbum?' });
     try {
-        const stdout = await ytDlpWrap.execPromise([
-            `ytsearch12:${text}`,
-            '--no-check-certificate',
-            '--cookies', './cookies.txt',
-            '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-            '--extractor-args', 'youtube:player_client=ios,web',
-            '--flat-playlist',
-            '--match-filter', 'duration <= 600',
-            '--print', '%(title)s|%(id)s'
-        ]);
+        const yts = require('yt-search');
+        const axios = require('axios');
+        const search = await yts(text);
+        const canciones = search.videos.slice(0, 8);
 
-        if (!stdout) return sock.sendMessage(from, { text: '❌ Sin resultados.' });
-        const canciones = stdout.split('\n').filter(l => l.includes('|'));
+        await sock.sendMessage(from, { text: `💿 Bajando ${canciones.length} rolas...` });
 
-        for (let cancion of canciones) {
+        for (let v of canciones) {
             try {
-                const [vTitle, vId] = cancion.split('|');
-                const outPath = path.join('/tmp', `${Date.now()}_${vId.trim()}.mp3`);
-
-                await ytDlpWrap.execPromise([
-                    `https://www.youtube.com/watch?v=${vId.trim()}`,
-                    '--no-check-certificate',
-                    '--cookies', './cookies.txt',
-                    '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-                    '--extractor-args', 'youtube:player_client=ios,web',
-                    '-x', '--audio-format', 'mp3',
-                    '-o', outPath
-                ]);
-
-                if (fs.existsSync(outPath)) {
-                    await sock.sendMessage(from, { audio: { url: outPath }, mimetype: 'audio/mp4', fileName: `${vTitle}.mp3` });
-                    setTimeout(() => { if (fs.existsSync(outPath)) try { fs.unlinkSync(outPath); } catch(e){} }, 10000);
+                const res = await axios.get(`https://sylphy.xyz/download/ytmp3?url=${encodeURIComponent(v.url)}&api_key=sylphy-ty5xtWm`);
+                if (res.data.result?.dl_url) {
+                    await sock.sendMessage(from, { audio: { url: res.data.result.dl_url }, mimetype: 'audio/mp4', fileName: `${v.title}.mp3` });
                 }
-                await new Promise(r => setTimeout(r, 1500));
+                await new Promise(r => setTimeout(r, 2000));
             } catch (e) { continue; }
         }
-        await sock.sendMessage(from, { text: '✅ *¡Álbum terminado!*' });
     } catch (e) {
         await sock.sendMessage(from, { text: '❌ Error en Álbum.' });
     }
 }
 break;
+
 
 case 'pin': case 'pinterest': {
     if (!text) return sock.sendMessage(from, { text: '¿Qué buscamos en Pinterest? Ejemplo: .pin yamaha mt09' });
