@@ -27,6 +27,22 @@ const { getTracks } = require('spotify-url-info')(fetch);
 // --- AQUÍ ESTÁ EL DE QR TERMINAL ---
 const qrcode = require('qrcode-terminal');
 
+
+
+
+// --- CHEQUEO DE HERRAMIENTAS ---
+const { exec } = require('child_process');
+
+exec('ffmpeg -version', (err, stdout) => {
+    if (err) console.log("❌ FFMPEG no encontrado en el sistema");
+    else console.log("✅ FFMPEG detectado con éxito");
+});
+
+exec('yt-dlp --version', (err, stdout) => {
+    if (err) console.log("❌ YT-DLP no encontrado en el sistema");
+    else console.log("✅ YT-DLP detectado versión: " + stdout.trim());
+});
+
 // --- CONFIGURACIÓN PARA RAILWAY (LINUX) ---
 const ffmpeg = require('ffmpeg-static');
 process.env.FFMPEG_PATH = ffmpeg;
