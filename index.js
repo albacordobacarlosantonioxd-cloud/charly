@@ -165,75 +165,83 @@ const pushname = m.pushName || 'Usuario'; // Esto extrae el nombre de quien escr
 
        switch (command) {
 
-
-case 'playlist': case 'play': {
-if (!text) return sock.sendMessage(from, { text: '¿Qué playlist buscamos, pariente? Pasa el nombre.' });
+case 'play': case 'playlist': { 
+if (!text) return sock.sendMessage(from, { text: '¿Qué playlist buscamos, pariente?' });
 
     try {
         const axios = require('axios');
+        const yts = require('yt-search');
         const apiKey = 'sylphy-ty5xtWm';
         
-        // Limpiamos el texto de caracteres raros que rompen la API
-        const cleanQuery = text.replace(/[^a-zA-Z0-9 ]/g, "").trim();
-        await sock.sendMessage(from, { text: `🔎 *Buscando:* _${cleanQuery}_ en Spotify...` });
+        await sock.sendMessage(from, { text: `🔎 *Buscando:* _${text}_...` });
 
-        // 1. Buscamos la playlist con un User-Agent para que la API nos vea como humanos
-        const searchRes = await axios.get(`https://sylphy.xyz/search/spotify`, {
-            params: { q: cleanQuery, api_key: apiKey },
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 10000 // Si en 10 segundos no responde, abortamos
-        }).catch(err => { return err.response; }); // Capturamos el error 500 aquí
+        let playlistUrl = '';
+        let playlistTitle = '';
 
-        if (!searchRes || searchRes.status !== 200 || !searchRes.data.result) {
-            return sock.sendMessage(from, { text: '❌ El servidor de búsqueda está caído o no dio resultados. Intenta con un nombre más corto.' });
+        // --- PASO 1: Intentar con Spotify API ---
+        try {
+            const searchRes = await axios.get(`https://sylphy.xyz/search/spotify`, {
+                params: { q: text, api_key: apiKey },
+                timeout: 5000 
+            });
+            
+            if (searchRes.data?.result?.[0]?.url) {
+                playlistUrl = searchRes.data.result[0].url;
+                playlistTitle = searchRes.data.result[0].title;
+            }
+        } catch (e) { 
+            console.log("⚠️ Spotify API falló, activando respaldo YT..."); 
         }
 
-        const resultados = searchRes.data.result;
-        // Filtramos para asegurar que lo que encontramos sea una playlist o tenga link
-        const playlist = resultados.find(r => r.url && (r.url.includes('playlist') || r.type === 'playlist')) || resultados[0];
-
-        if (!playlist || !playlist.url) {
-            return sock.sendMessage(from, { text: '❌ No hallé un link válido de playlist.' });
+        // --- PASO 2: Si Spotify falló, usamos YT-Search para hallar una lista ---
+        if (!playlistUrl) {
+            const ytSearch = await yts({ query: text, category: 'playlist' });
+            if (ytSearch.playlists && ytSearch.playlists.length > 0) {
+                playlistUrl = ytSearch.playlists[0].url;
+                playlistTitle = ytSearch.playlists[0].title;
+            }
         }
 
-        await sock.sendMessage(from, { 
-            text: `✅ *Encontrada:* _${playlist.title}_\n🎧 *Extrayendo temas...*` 
-        });
-
-        // 2. Extraemos las rolas
-        const tracks = await getTracks(playlist.url);
-        if (!tracks || tracks.length === 0) {
-            return sock.sendMessage(from, { text: '❌ Encontré la playlist pero no pude leer las canciones. ¿Es privada?' });
+        if (!playlistUrl) {
+            return sock.sendMessage(from, { text: '❌ No hallé ninguna playlist con ese nombre ni en Spotify ni en YT.' });
         }
 
-        const listaCorta = tracks.slice(0, 5); // Bajamos solo 5 para probar estabilidad
+        await sock.sendMessage(from, { text: `✅ *Encontrada:* _${playlistTitle}_\n🎧 *Descargando temas principales...*` });
 
-        for (let track of listaCorta) {
+        // --- PASO 3: Extraer y Descargar ---
+        // Si es de YT, usamos yt-search para sacar los videos. Si es de Spotify, usamos getTracks.
+        let canciones = [];
+        if (playlistUrl.includes('youtube.com')) {
+            const listData = await yts({ listId: playlistUrl.split('list=')[1] });
+            canciones = listData.videos.slice(0, 5); // Bajamos 5
+        } else {
+            const tracks = await getTracks(playlistUrl);
+            canciones = tracks.slice(0, 5);
+        }
+
+        for (let track of canciones) {
             try {
-                let trackUrl = track.url || track.external_urls?.spotify;
-                if (!trackUrl) continue;
-
-                // 3. Descarga con reintento si falla
-                const dlRes = await axios.get(`https://sylphy.xyz/download/spotify?url=${encodeURIComponent(trackUrl)}&api_key=${apiKey}`);
+                // Buscamos el link de descarga (usamos el endpoint de YT-MP3 que es más estable que el de Spotify)
+                const targetUrl = track.url || track.external_urls?.spotify || `https://www.youtube.com/watch?v=${track.videoId}`;
+                
+                const dlRes = await axios.get(`https://sylphy.xyz/download/ytmp3?url=${encodeURIComponent(targetUrl)}&api_key=${apiKey}`);
                 
                 if (dlRes.data?.result?.dl_url) {
                     await sock.sendMessage(from, { 
                         audio: { url: dlRes.data.result.dl_url }, 
                         mimetype: 'audio/mp4', 
-                        fileName: `${track.name}.mp3` 
+                        fileName: `${track.title || track.name}.mp3` 
                     });
                 }
-                // Pausa obligatoria de 4 segundos (Error 500 suele ser por spam)
-                await new Promise(r => setTimeout(r, 4000));
-
+                await new Promise(r => setTimeout(r, 4000)); // Pausa de seguridad
             } catch (err) { continue; }
         }
 
-        await sock.sendMessage(from, { text: `✅ *¡Playlist terminada!*` });
+        await sock.sendMessage(from, { text: `✅ *Playlist "${playlistTitle}" terminada.*` });
 
     } catch (e) {
-        console.error("LOG DE ERROR PARA RAILWAY:", e.message);
-        await sock.sendMessage(from, { text: '❌ Error interno. La API de Spotify está saturada ahorita.' });
+        console.error("ERROR FINAL:", e);
+        await sock.sendMessage(from, { text: '❌ Error al procesar la solicitud.' });
     }
 }
 break;
