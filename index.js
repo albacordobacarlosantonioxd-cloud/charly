@@ -109,13 +109,40 @@ async function startBot() {
         }
 
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+            const statusCode = (lastDisconnect.error instanceof Boom)?.output?.statusCode;
+
+            // 🚩 LA MEDICINA: Si hay otra sesión abierta, matamos este proceso
+            if (statusCode === DisconnectReason.connectionReplaced) {
+                console.log("🚫 CONFLICTO: Sesión duplicada. Cerrando proceso viejo...");
+                process.exit(); 
+            }
+
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
             console.log('⚠️ Conexión cerrada, reintentando:', shouldReconnect);
-            if (shouldReconnect) startBot();
+            
+            // Reintento con un pequeño delay para que no se atropelle
+            if (shouldReconnect) {
+                setTimeout(() => startBot(), 5000);
+            }
         } else if (connection === 'open') {
             console.log('✅ ¡CONECTADO EXITOSAMENTE, PARIENTE!');
         }
     });
+
+    // --- MANEJO DE MENSAJES ---
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        // 🚩 EL FILTRO: Esto evita que mande doble mensaje
+        if (type !== 'notify') return; 
+
+        const m = messages[0];
+        if (!m.message || m.key.fromMe) return;
+
+        // Aquí ya sigue todo tu código de comandos...
+        const from = m.key.remoteJid;
+        const body = m.message.conversation || m.message.extendedTextMessage?.text || "";
+        // ... (el resto de tu lógica de comandos)
+    });
+
     // ... (Aquí sigue el resto de tu lógica de mensajes)
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
