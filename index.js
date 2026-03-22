@@ -263,61 +263,13 @@ if (apiAction) {
 
         //////////
 
-// 1. Obtenemos los datos del chat actual de la base de datos
-const chat = global.db.data.chats[m.chat] || {};
 
-// 2. LA RESTRICCIÓN MÁGICA:
-// Si el bot está apagado EN ESTE GRUPO...
-// Y el comando NO ES 'bot' (para poder prenderlo)...
-// Y quien escribe NO ES EL DUEÑO (tú siempre mandas)...
-// ENTONCES: No hagas nada (return).
-if (chat.isBanned && command !== 'bot' && !m.isOwner) {
-    return; // El bot se queda callado como tumba 🤫
-}
+
 
 ///////////////
 
-// --- LÓGICA DEL COMANDO BOT ON/OFF ---
-if (command === 'bot') {
-    // 1. Verificación de permisos (Admin o Owner)
-    const isAdmin = m.isGroup ? (m.message?.extendedTextMessage?.contextInfo?.participant || m.sender) : false;
-    if (!m.isOwner && !isAdmin) return m.reply('《✧》 Solo los *Administradores* pueden usar este comando.');
 
-    const chat = global.db.data.chats[m.chat] || {};
-    const estado = chat.isBanned ?? false;
-    const botId = client.user.id.split(':')[0] + "@s.whatsapp.net";
-    const nameBot = global.db.data.settings[botId]?.namebot || 'Bot';
 
-    // Opción para DESACTIVAR
-    if (args[0] === 'off') {
-        if (estado) return m.reply('《✧》 El *Bot* ya estaba *desactivado* en este grupo.');
-        chat.isBanned = true;
-        return m.reply(`《✧》 Has *Desactivado* a *${nameBot}* en este grupo.`);
-    }
-
-    // Opción para ACTIVAR
-    if (args[0] === 'on') {
-        if (!estado) return m.reply(`《✧》 *${nameBot}* ya estaba *activado* en este grupo.`);
-        chat.isBanned = false;
-        return m.reply(`《✧》 Has *Activado* a *${nameBot}* en este grupo.`);
-    }
-
-    // Menú de Estado
-    const textoEstado = `*✿ Estado de ${nameBot} (｡•́‿•̀｡)*\n\n` +
-                        `𖣣ֶㅤ֯⌗ ❀  ⬭ *Actual ›* ${estado ? '✗ Desactivado' : '✓ Activado'}\n\n` +
-                        `✎ Puedes cambiarlo con:\n` +
-                        `> ● _Activar ›_ *bot on*\n` +
-                        `> ● _Desactivar ›_ *bot off*`;
-
-    await m.reply(textoEstado);
-    return; // Detiene la ejecución para que no entre al switch
-}
-
-// --- RESTRICCIÓN DE FUNCIONAMIENTO (LA ADUANA) ---
-const chatActual = global.db.data.chats[m.chat] || {};
-if (chatActual.isBanned && command !== 'bot' && !m.isOwner) {
-    return; // Si está ban, no hace nada más
-}
 
 //////////////
 
