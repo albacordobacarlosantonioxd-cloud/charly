@@ -170,18 +170,25 @@ const nsfwActions = ["spank", "undress", "yuri", "sixnine", "cummouth", "suckboo
 
 // 2. Alias en español para que sea más fácil de usar
 const nsfwAlias = {
-    'violar': 'anal', 
-    'coger': 'fuck', 
+    // Los que ya tenías
     '69': 'sixnine', 
-    'paja': 'fap',
-    'venirse': 'cum', 
+    'paja': 'fap', 
     'mamada': 'blowjob', 
     'bj': 'blowjob', 
     'rusa': 'boobjob',
     'tijeras': 'yuri', 
     'nalgada': 'spank', 
     'encuerar': 'undress', 
-    'squirt': 'squirting'
+    'squirt': 'squirting',
+    'leche': 'cumshot',
+    'mamar': 'suckboobs',
+    'lamer': 'lickpussy',
+    'dedos': 'fingering',
+    'garganta': 'deepthroat',
+    'amarrar': 'bondage',
+    'orgia': 'orgy',
+    'manosear': 'grope',
+    'pajas': 'handjob'
 };
 
 // 3. Detectamos si el mensaje es uno de estos comandos
