@@ -710,7 +710,7 @@ break;
 
 //////////
 
-case 'ytaudio': case 'audio':  {
+case 'ytaudio': case 'audio': {
     const axios = require('axios');
     const yts = require('yt-search');
 
@@ -718,36 +718,49 @@ case 'ytaudio': case 'audio':  {
     if (!query) return sock.sendMessage(from, { text: '⚠️ ¡Epa! Escribe el nombre o pega el link, pariente.' }, { quoted: m });
 
     try {
-        let videoUrl = '';
-        let videoTitle = '';
+        let videoData = null;
 
-        // 1. BUSCAR EN YOUTUBE
+        // 1. OBTENER INFORMACIÓN DEL VIDEO
         if (query.match(/(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/)) {
-            videoUrl = query;
-            videoTitle = 'Audio de YouTube';
+            // Si es link, buscamos por ID para sacar la info completa (vistas, autor, etc.)
+            const videoId = yts.parseVideoId(query);
+            videoData = await yts({ videoId: videoId });
         } else {
+            // Si es texto, buscamos normalmente
             const search = await yts(query);
             if (!search || !search.videos.length) return sock.sendMessage(from, { text: '❌ No encontré esa rola.' });
-            videoUrl = search.videos[0].url;
-            videoTitle = search.videos[0].title;
-            await sock.sendMessage(from, { text: ` *${videoTitle}*\n⏳ Bajando audio` }, { quoted: m });
+            videoData = search.videos[0];
         }
 
-        // 2. LLAMADA A LA API (Con tu URL de Sylphy)
-        const apiKey = 'sylphy-ty5xtWm';
-        const apiUrl = `https://sylphy.xyz/download/ytmp3?url=${encodeURIComponent(videoUrl)}&api_key=${apiKey}`;
+        const videoUrl = videoData.url;
+        const videoTitle = videoData.title;
+        const vistas = (videoData.views || 0).toLocaleString();
+        const canal = videoData.author?.name || 'Desconocido';
 
+        // 2. ENVIAR FICHA TÉCNICA CON MINIATURA
+        const infoMessage = `➩ Descargando Audio › *${videoTitle}*
+
+> ❖ Canal › *${canal}*
+> ⴵ Duración › *${videoData.timestamp || '??:??'}*
+> ❀ Vistas › *${vistas}*
+> ✩ Publicado › *${videoData.ago || 'Reciente'}*
+> ❒ Enlace › *${videoUrl}*`;
+
+        await sock.sendMessage(from, { 
+            image: { url: videoData.image || videoData.thumbnail }, 
+            caption: infoMessage 
+        }, { quoted: m });
+
+        // 3. LLAMADA A LA API (Sylphy)
+        const apiUrl = `https://sylphy.xyz/download/ytmp3?url=${encodeURIComponent(videoUrl)}&api_key=${SYLPHY_KEY}`;
         const res = await axios.get(apiUrl);
-
-        // --- LA LLAVE MAESTRA: Buscamos específicamente en result.dl_url ---
         const downloadUrl = res.data.result?.dl_url;
 
         if (!downloadUrl) {
-            console.log('--- ERROR DE ESTRUCTURA ---', res.data);
-            return sock.sendMessage(from, { text: '❌ La API cambió la jugada. No encontré el link de descarga.' });
+            return sock.sendMessage(from, { text: '❌ La API no soltó el link. Intenta con otra rola.' });
         }
 
-        // 3. ENVIAR EL AUDIO
+        // 4. ENVIAR EL ARCHIVO DE AUDIO
         await sock.sendMessage(from, { 
             audio: { url: downloadUrl }, 
             mimetype: 'audio/mpeg',
@@ -758,11 +771,12 @@ case 'ytaudio': case 'audio':  {
 
     } catch (e) {
         console.error("ERROR EN YTAUDIO:", e.message);
-        await sock.sendMessage(from, { text: '❌ Valio queso, intenta de nuevo.' });
+        await sock.sendMessage(from, { text: '❌ Valio queso, el servidor está saturado.' });
     }
 }
 break;
-//////////
+
+////////
 
 case 'video': case 'ytvideo': {
     if (!text) return sock.sendMessage(from, { text: '¿Qué video buscamos, pariente? Pasa el nombre o link.' });
@@ -770,28 +784,44 @@ case 'video': case 'ytvideo': {
     try {
         const yts = require('yt-search');
         const axios = require('axios');
-        let videoUrl = '';
-        let videoTitle = 'Video de YouTube';
+        let videoData = null;
 
-        // 1. ¿ES UN LINK O ES TEXTO?
+        // 1. REACCIÓN DE "ESPERA"
+        await sock.sendMessage(from, { react: { text: "⏳", key: m.key } });
+
+        // 2. OBTENER INFORMACIÓN (Link o Texto)
         if (text.includes('youtu.be') || text.includes('youtube.com')) {
-            // Si ya es un link, lo limpiamos y lo usamos tal cual
-            videoUrl = text.trim();
-            // Intentamos sacar el título rápido, si falla no pasa nada
-            const searchLink = await yts(videoUrl);
-            videoTitle = searchLink.videos[0]?.title || 'Video de YouTube';
+            const videoId = yts.parseVideoId(text);
+            videoData = await yts({ videoId: videoId });
         } else {
-            // Si es texto, buscamos el video normalmente
-            await sock.sendMessage(from, { text: '🔍 *Buscando video...*' });
             const search = await yts(text);
-            if (!search.videos.length) return sock.sendMessage(from, { text: '❌ No hallé el video.' });
-            videoUrl = search.videos[0].url;
-            videoTitle = search.videos[0].title;
+            if (!search.videos.length) {
+                await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
+                return sock.sendMessage(from, { text: '❌ No hallé el video.' });
+            }
+            videoData = search.videos[0];
         }
 
-        await sock.sendMessage(from, { text: `🎥 *Preparando:* ${videoTitle}\n_Esto puede tardar según el peso..._` });
+        const videoUrl = videoData.url;
+        const videoTitle = videoData.title;
+        const vistas = (videoData.views || 0).toLocaleString();
+        const canal = videoData.author?.name || 'Desconocido';
 
-        // 2. LLAMADA A LA API DE SYLPHY (Aquí es donde se descarga)
+        // 3. ENVIAR FICHA TÉCNICA (Miniatura + Info)
+        const infoMessage = `➩ Descargando Video › *${videoTitle}*
+
+> ❖ Canal › *${canal}*
+> ⴵ Duración › *${videoData.timestamp || '??:??'}*
+> ❀ Vistas › *${vistas}*
+> ✩ Publicado › *${videoData.ago || 'Reciente'}*
+> ❒ Enlace › *${videoUrl}*`;
+
+        await sock.sendMessage(from, { 
+            image: { url: videoData.image || videoData.thumbnail }, 
+            caption: infoMessage 
+        }, { quoted: m });
+
+        // 4. DESCARGA DESDE LA API
         const res = await axios.get(`https://sylphy.xyz/download/ytmp4?url=${encodeURIComponent(videoUrl)}&api_key=sylphy-ty5xtWm`);
         const dl_url = res.data.result?.dl_url;
 
@@ -799,20 +829,22 @@ case 'video': case 'ytvideo': {
             await sock.sendMessage(from, { 
                 video: { 
                     url: dl_url,
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                    }
+                    headers: { 'User-Agent': 'Mozilla/5.0' }
                 }, 
-                caption: `✅ *${videoTitle}*\n\n_Disfrútalo, pariente._`,
+                caption: `✅ *${videoTitle}*`,
                 mimetype: 'video/mp4',
                 fileName: `${videoTitle}.mp4`
             }, { quoted: m });
+
+            // REACCIÓN DE "ÉXITO"
+            await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
         } else {
-            throw new Error("La API no devolvió un enlace de descarga.");
+            throw new Error("No link");
         }
     } catch (e) {
         console.error("ERROR VIDEO:", e.message);
-        await sock.sendMessage(from, { text: '❌ Falló la descarga. Puede que el video sea muy largo o el servidor esté saturado.' });
+        await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
+        await sock.sendMessage(from, { text: '❌ Falló la descarga. Intenta de nuevo más tarde.' });
     }
 }
 break;
