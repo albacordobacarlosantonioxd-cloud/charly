@@ -958,11 +958,85 @@ break;
 
 ////////
 
+case 'anal': {
+    // 1. Verificación de SFW (Si el grupo tiene bloqueado lo NSFW)
+    if (isGroup && db.groups[from]?.sfw) {
+        return sock.sendMessage(from, { text: '🚫 *Comando Bloqueado:* El modo SFW está activo. ¡Aquí no se puede, pariente!' }, { quoted: m });
+    }
 
+    try {
+        const apiKey = 'api-qG4nw'; // Tu llave de Stellar
+        const emisor = m.pushName || 'Usuario';
+
+        // 2. Detección de a quién le van a dar (mención o respuesta)
+        let personaEtiquetada = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || 
+                                m.message?.extendedTextMessage?.contextInfo?.participant || null;
+        let textoMencion = personaEtiquetada ? `@${personaEtiquetada.split('@')[0]}` : "a todos";
+
+        // 3. Llamada a la API de Stellar
+        // Nota: Stellar siempre responde con JSON, así que no ocupamos arraybuffer aquí
+        const response = await axios.get(`https://api.stellarwa.xyz/nsfw/interaction?inter=anal&key=${apiKey}`);
+        
+        // 4. Extraer el link del video/gif del JSON de Stellar
+        // Stellar suele devolver { status: 200, result: "url_del_video" }
+        const gifUrl = response.data.result;
+
+        if (!gifUrl) throw new Error("La API no mandó link.");
+
+        // 5. Envío del video como GIF (gifPlayback: true)
+        await sock.sendMessage(from, { 
+            video: { url: gifUrl }, 
+            caption: `😈 *${emisor}* le está dando por atrás a ${textoMencion}!`,
+            gifPlayback: true,
+            mentions: personaEtiquetada ? [personaEtiquetada] : [] 
+        }, { quoted: m });
+
+    } catch (e) {
+        console.error("ERROR EN ANAL:", e.message);
+        await sock.sendMessage(from, { text: '❌ Valio queso, no pude conseguir el video. Intenta de nuevo.' });
+    }
+}
+break;
 
 /////////
 
+case 'cum': {
+    // 1. Verificación de SFW
+    if (isGroup && db.groups[from]?.sfw) {
+        return sock.sendMessage(from, { text: '🚫 *Comando Bloqueado:* El modo SFW está activo. ¡Nada de cochinadas aquí!' }, { quoted: m });
+    }
 
+    try {
+        const apiKey = 'api-qG4nw'; // Tu llave de Stellar
+        const emisor = m.pushName || 'Usuario';
+
+        // 2. ¿A quién le toca el baño? (mención o respuesta)
+        let personaEtiquetada = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || 
+                                m.message?.extendedTextMessage?.contextInfo?.participant || null;
+        let textoMencion = personaEtiquetada ? `@${personaEtiquetada.split('@')[0]}` : "a todos";
+
+        // 3. Llamada a la API (Cambiamos 'anal' por 'cum')
+        const response = await axios.get(`https://api.stellarwa.xyz/nsfw/interaction?inter=cum&key=${apiKey}`);
+        
+        // 4. Extraer el link del video
+        const gifUrl = response.data.result;
+
+        if (!gifUrl) throw new Error("La API no mandó el link del video.");
+
+        // 5. Envío del video/gif
+        await sock.sendMessage(from, { 
+            video: { url: gifUrl }, 
+            caption: `💦 *${emisor}* se vino todito sobre ${textoMencion}!`,
+            gifPlayback: true,
+            mentions: personaEtiquetada ? [personaEtiquetada] : [] 
+        }, { quoted: m });
+
+    } catch (e) {
+        console.error("ERROR EN CUM:", e.message);
+        await sock.sendMessage(from, { text: '❌ No pude cargar el video, pariente. Intenta de nuevo.' });
+    }
+}
+break;
 
 /////////
 
