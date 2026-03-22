@@ -1,10 +1,15 @@
-const http = require('http');
-const port = process.env.PORT || 3000;
-http.createServer((req, res) => {
-    res.write('Bot Maestro Online');
-    res.end();
-}).listen(port);
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
 
+// Esto crea una mini página web que Koyeb revisa para saber que el bot está vivo
+app.get('/', (req, res) => {
+    res.send('✅ El Bot de Spotify está Activo y Firme, pariente.');
+});
+
+app.listen(PORT, () => {
+    console.log(`🚀 Servidor Keep-Alive corriendo en el puerto ${PORT}`);
+});
 
 const { 
     default: makeWASocket, 
@@ -33,15 +38,8 @@ const qrcode = require('qrcode-terminal');
 // --- CHEQUEO DE HERRAMIENTAS ---
 const { exec } = require('child_process');
 
-exec('ffmpeg -version', (err, stdout) => {
-    if (err) console.log("❌ FFMPEG no encontrado en el sistema");
-    else console.log("✅ FFMPEG detectado con éxito");
-});
 
-exec('yt-dlp --version', (err, stdout) => {
-    if (err) console.log("❌ YT-DLP no encontrado en el sistema");
-    else console.log("✅ YT-DLP detectado versión: " + stdout.trim());
-});
+
 
 // --- CONFIGURACIÓN PARA RAILWAY (LINUX) ---
 const ffmpeg = require('ffmpeg-static');
@@ -1026,42 +1024,55 @@ break;
 ╰───『 *By Charly-Bot* 』───╯` });
                 break;
 
-case 'v': case 'ai':
-                if (!text) return sock.sendMessage(from, { text: '¿Qué quieres que diga?' });
-                try {
-                    const resIA = await axios.post('https://api.mistral.ai/v1/chat/completions', {
-                        model: "open-mistral-7b",
-                        messages: [
-                            { role: "system", content: "Eres Bot Maestro de Zacatecas. Habla corto, máximo 2 frases, usa modismos mexicanos y sé directo." }, 
-                            { role: "user", content: text }
-                        ]
-                    }, { headers: { 'Authorization': `Bearer ${MISTRAL_API_KEY}` } });
+case 'v': case 'ai': {
+    if (!text) return sock.sendMessage(from, { text: '¿Qué quieres que diga, pariente?' });
+    
+    try {
+        const axios = require('axios');
+        // Llamada a Mistral
+        const resIA = await axios.post('https://api.mistral.ai/v1/chat/completions', {
+            model: "open-mistral-7b",
+            messages: [
+                { role: "system", content: "Eres Bot Maestro . Habla corto, máximo 2 frases, usa modismos mexicanos y sé directo." }, 
+                { role: "user", content: text }
+            ]
+        }, { headers: { 'Authorization': `Bearer ${MISTRAL_API_KEY}` } });
 
-                    let respuestaTexto = resIA.data.choices[0].message.content;
+        let respuestaTexto = resIA.data.choices[0].message.content;
 
-                    if (command === 'ai') {
-                        await sock.sendMessage(from, { text: respuestaTexto });
-                    } else {
-                        // --- LIMPIEZA PARA EL AUDIO ---
-                        // Quitamos emojis, asteriscos y cosas que rompen el link de Google
-                        let textoLimpio = respuestaTexto
-                            .replace(/[*_~]/g, '') // Quita formato de texto
-                            .replace(/[^\w\sáéíóúÁÉÍÓÚñÑ,.?¡!¿]/g, '') // Quita emojis y símbolos raros
-                            .slice(0, 200); // Cortamos a 200 caracteres para que no falle
+        if (command === 'ai') {
+            await sock.sendMessage(from, { text: respuestaTexto });
+        } else {
+            // --- LIMPIEZA PARA EL AUDIO ---
+            let textoLimpio = respuestaTexto
+                .replace(/[*_~]/g, '') 
+                .replace(/[^\w\sáéíóúÁÉÍÓÚñÑ,.?¡!¿]/g, '') 
+                .slice(0, 200); 
 
-                        const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(textoLimpio)}&tl=es&client=tw-ob`;
-                        
-                        await sock.sendMessage(from, { 
-                            audio: { url: ttsUrl }, 
-                            mimetype: 'audio/mp4', 
-                            ptt: true 
-                        }, { quoted: m });
-                    }
-                } catch (e) { 
-                    console.error("Error en IA/Audio:", e.message);
-                    await sock.sendMessage(from, { text: '❌ No pude procesar el audio, intenta con un texto más corto.' }); 
+            const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(textoLimpio)}&tl=es&client=tw-ob`;
+            
+            // --- EL TRUCO: Descargar el audio primero ---
+            const resAudio = await axios({
+                method: 'get',
+                url: ttsUrl,
+                responseType: 'arraybuffer',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
                 }
-                break;
+            });
+
+            await sock.sendMessage(from, { 
+                audio: Buffer.from(resAudio.data), // Enviamos el audio real, no el link
+                mimetype: 'audio/mp4', 
+                ptt: true 
+            }, { quoted: m });
+        }
+    } catch (e) { 
+        console.error("Error en IA/Audio:", e.message);
+        await sock.sendMessage(from, { text: '❌ Valio queso el audio, intenta de nuevo.' }); 
+    }
+}
+break;
 
 
 case 'kiss': case 'hug': case 'slap': {
