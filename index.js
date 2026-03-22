@@ -720,15 +720,19 @@ case 'ytaudio': case 'audio': {
     try {
         let videoData = null;
 
-        // 1. OBTENER INFORMACIÓN DEL VIDEO
+        // 1. REACCIÓN INICIAL (⏳)
+        await sock.sendMessage(from, { react: { text: "⏳", key: m.key } });
+
+        // 2. OBTENER INFORMACIÓN DEL VIDEO
         if (query.match(/(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/)) {
-            // Si es link, buscamos por ID para sacar la info completa (vistas, autor, etc.)
             const videoId = yts.parseVideoId(query);
             videoData = await yts({ videoId: videoId });
         } else {
-            // Si es texto, buscamos normalmente
             const search = await yts(query);
-            if (!search || !search.videos.length) return sock.sendMessage(from, { text: '❌ No encontré esa rola.' });
+            if (!search || !search.videos.length) {
+                await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
+                return sock.sendMessage(from, { text: '❌ No encontré esa rola.' });
+            }
             videoData = search.videos[0];
         }
 
@@ -737,7 +741,7 @@ case 'ytaudio': case 'audio': {
         const vistas = (videoData.views || 0).toLocaleString();
         const canal = videoData.author?.name || 'Desconocido';
 
-        // 2. ENVIAR FICHA TÉCNICA CON MINIATURA
+        // 3. ENVIAR FICHA TÉCNICA CON MINIATURA
         const infoMessage = `➩ Descargando Audio › *${videoTitle}*
 
 > ❖ Canal › *${canal}*
@@ -751,26 +755,30 @@ case 'ytaudio': case 'audio': {
             caption: infoMessage 
         }, { quoted: m });
 
-        // 3. LLAMADA A LA API (Sylphy)
+        // 4. LLAMADA A LA API (Sylphy)
         const apiUrl = `https://sylphy.xyz/download/ytmp3?url=${encodeURIComponent(videoUrl)}&api_key=${SYLPHY_KEY}`;
         const res = await axios.get(apiUrl);
         const downloadUrl = res.data.result?.dl_url;
 
         if (!downloadUrl) {
+            await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
             return sock.sendMessage(from, { text: '❌ La API no soltó el link. Intenta con otra rola.' });
         }
 
-        // 4. ENVIAR EL ARCHIVO DE AUDIO
+        // 5. ENVIAR EL ARCHIVO DE AUDIO
         await sock.sendMessage(from, { 
             audio: { url: downloadUrl }, 
             mimetype: 'audio/mpeg',
             fileName: `${videoTitle}.mp3`
         }, { quoted: m });
 
+        // REACCIÓN DE ÉXITO (✅)
+        await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
         console.log(`[✅] Audio enviado: ${videoTitle}`);
 
     } catch (e) {
         console.error("ERROR EN YTAUDIO:", e.message);
+        await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
         await sock.sendMessage(from, { text: '❌ Valio queso, el servidor está saturado.' });
     }
 }
