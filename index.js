@@ -1505,53 +1505,27 @@ case 'tag': {
                 });
                 break;
             }
-            case 'kick':
+case 'kick':
+            case 'sacar': {
                 if (!isAdmin) return;
-                const toKick = m.message.extendedTextMessage?.contextInfo?.participant || text.replace(/\D/g,'') + '@s.whatsapp.net';
+
+                // 1. Identificamos a quién vamos a sacar (por mención o citando mensaje)
+                const toKick = m.message.extendedTextMessage?.contextInfo?.participant || 
+                               (text ? text.replace(/\D/g,'') + '@s.whatsapp.net' : null);
+
+                if (!toKick) return sock.sendMessage(from, { text: '《✧》 Menciona a quién quieres darle cuello o responde a su mensaje.' });
+
+                // 2. EL MENSAJE DE DESPEDIDA (Antes de sacarlo)
+                await sock.sendMessage(from, { 
+                    text: `@${toKick.split('@')[0]} Te saqué por puta. 👋🔥`, 
+                    mentions: [toKick] 
+                });
+
+                // 3. SE VA DEL GRUPO
                 await sock.groupParticipantsUpdate(from, [toKick], "remove");
                 break;
-case 'add': {
-    const axios = require('axios');
-    
-    // 1. Limpiamos el número (del texto, o de a quién le respondes)
-    let num = text ? text.replace(/[^0-9]/g, '') : (m.message?.extendedTextMessage?.contextInfo?.participant?.split('@')[0]);
+            }
 
-    if (!num) return sock.sendMessage(from, { text: '⚠️ Indica el número, compa. Ejemplo: .add 521234567890' });
-
-    const jid = num + '@s.whatsapp.net';
-
-    try {
-        // 2. LE AVENTAMOS LA PETICIÓN DIRECTO A WHATSAPP
-        // No preguntamos si somos admin, que WhatsApp nos diga la verdad
-        const response = await sock.groupParticipantsUpdate(from, [jid], 'add');
-
-        // 3. Revisamos qué nos dijo WhatsApp
-        const status = response[0].status;
-
-        if (status === "200") {
-            return sock.sendMessage(from, { text: `✅ ¡A la saca! @${num} ya está adentro.`, mentions: [jid] });
-        } else if (status === "403") {
-            return sock.sendMessage(from, { text: '⚠️ Ese compa tiene su privacidad de "Nadie me agregue". Mándale el link.' });
-        } else if (status === "408") {
-            return sock.sendMessage(from, { text: '❌ El número no existe o es inválido.' });
-        } else if (status === "409") {
-            return sock.sendMessage(from, { text: '✅ Esa persona ya está en el grupo, pariente.' });
-        } else {
-            return sock.sendMessage(from, { text: `⚠️ WhatsApp no me dejó. Código: ${status}. (Posiblemente no soy admin).` });
-        }
-
-    } catch (err) {
-        // Esto filtra el error de "bad-request" para que no crashee ni ensucie la consola
-        if (err.hasOwnProperty('output') && err.output.statusCode === 500) {
-            return sock.sendMessage(from, { 
-                text: '❌ *Error de Permisos:* WhatsApp rechazó la solicitud. \n\nProbablemente no soy Admin o mi sesión está desactualizada, pariente.' 
-            });
-        }
-        
-        console.log("AVISO: Error controlado al agregar (400 Bad Request)");
-        await sock.sendMessage(from, { text: '❌ No pude agregar al usuario. Intenta dándome admin de nuevo.' });
-    }
-}
 break;
             case 'del': case 'delete': {
             if (!m.message.extendedTextMessage?.contextInfo?.stanzaId) return sock.sendMessage(from, { text: '❌ Responde al mensaje que quieres borrar.' });
