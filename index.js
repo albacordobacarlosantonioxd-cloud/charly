@@ -1240,23 +1240,34 @@ break;
 /////////
 
 case 'code': case 'serbot': {
-    // 1. Importamos la función del archivo subbot.js
-    const { startSubBot } = await import('./subbot.js'); 
+    // 1. Importamos la función con require (estilo CommonJS)
+    const { startSubBot } = require('./subbot.js'); 
 
-    // 2. Detectamos el número de quien mandó el mensaje automáticamente
-    // m.sender suele ser "521234567890@s.whatsapp.net"
-    const phone = m.sender.split('@')[0]; 
+    // 2. BUSCAMOS EL REMITENTE (m.sender) DE FORMA SEGURA
+    // Intentamos varias formas por si una falla
+    const sender = m.sender || m.key.participant || m.key.remoteJid || '';
+    
+    if (!sender || !sender.includes('@')) {
+        return sock.sendMessage(m.key.remoteJid, { text: "❌ No pude detectar tu número automáticamente." }, { quoted: m });
+    }
+
+    // 3. Limpiamos el número para que sea puro dígito
+    const phone = sender.split('@')[0].replace(/[^0-9]/g, ''); 
+    const chatId = m.key.remoteJid;
 
     try {
-        // 3. Avisamos que estamos trabajando en eso
-        await sock.sendMessage(m.key.remoteJid, { text: "⏳ Detectando tu número y generando código de vinculación..." }, { quoted: m });
+        // 4. Avisamos al usuario con mención
+        await sock.sendMessage(chatId, { 
+            text: `⏳ *@${phone}*, estoy generando tu código de vinculación. Espera unos segundos...`,
+            mentions: [sender]
+        }, { quoted: m });
 
-        // 4. Arrancamos el proceso del Sub-Bot
+        // 5. Arrancamos el proceso en subbot.js
         await startSubBot(m, sock, phone); 
         
     } catch (e) {
         console.error("Error en comando .code:", e);
-        await sock.sendMessage(m.key.remoteJid, { text: "❌ Hubo un fallo al generar tu código. Intenta de nuevo." }, { quoted: m });
+        await sock.sendMessage(chatId, { text: "❌ Hubo un fallo al generar el código." });
     }
 }
 break;
