@@ -744,16 +744,17 @@ case 'video': case 'ytvideo': {
         const yts = require('yt-search');
         const axios = require('axios');
         let videoUrl = '';
-        let videoTitle = 'Video';
+        let videoTitle = 'Video de YouTube';
 
         // 1. ¿ES UN LINK O ES TEXTO?
         if (text.includes('youtu.be') || text.includes('youtube.com')) {
-            videoUrl = text.trim(); // Si es link, lo usamos directo
-            // (Opcional) Buscamos info rápido para tener el título real
-            const info = await yts({ videoId: yts.parseVideoId(videoUrl) });
-            videoTitle = info?.title || 'Video de YouTube';
+            // Si ya es un link, lo limpiamos y lo usamos tal cual
+            videoUrl = text.trim();
+            // Intentamos sacar el título rápido, si falla no pasa nada
+            const searchLink = await yts(videoUrl);
+            videoTitle = searchLink.videos[0]?.title || 'Video de YouTube';
         } else {
-            // Si es texto, buscamos el video
+            // Si es texto, buscamos el video normalmente
             await sock.sendMessage(from, { text: '🔍 *Buscando video...*' });
             const search = await yts(text);
             if (!search.videos.length) return sock.sendMessage(from, { text: '❌ No hallé el video.' });
@@ -763,7 +764,7 @@ case 'video': case 'ytvideo': {
 
         await sock.sendMessage(from, { text: `🎥 *Preparando:* ${videoTitle}\n_Esto puede tardar según el peso..._` });
 
-        // 2. LLAMADA A LA API DE SYLPHY
+        // 2. LLAMADA A LA API DE SYLPHY (Aquí es donde se descarga)
         const res = await axios.get(`https://sylphy.xyz/download/ytmp4?url=${encodeURIComponent(videoUrl)}&api_key=sylphy-ty5xtWm`);
         const dl_url = res.data.result?.dl_url;
 
@@ -780,11 +781,11 @@ case 'video': case 'ytvideo': {
                 fileName: `${videoTitle}.mp4`
             }, { quoted: m });
         } else {
-            throw new Error("API no devolvió link");
+            throw new Error("La API no devolvió un enlace de descarga.");
         }
     } catch (e) {
-        console.error("ERROR VIDEO:", e);
-        await sock.sendMessage(from, { text: '❌ El servidor de descarga falló o el video es muy pesado. Intenta con otro.' });
+        console.error("ERROR VIDEO:", e.message);
+        await sock.sendMessage(from, { text: '❌ Falló la descarga. Puede que el video sea muy largo o el servidor esté saturado.' });
     }
 }
 break;
