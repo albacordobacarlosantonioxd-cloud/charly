@@ -161,6 +161,108 @@ const pushname = m.pushName || 'Usuario'; // Esto extrae el nombre de quien escr
         }
 
 
+
+
+        //////////
+
+// 1. Lista maestra de lo que acepta la API (Sin repetir los que ya tenías como comandos sueltos)
+const nsfwActions = ["spank", "undress", "yuri", "sixnine", "cummouth", "suckboobs", "cumshot", "lickpussy", "lickdick", "lickass", "handjob", "grope", "fingering", "creampie", "facesitting", "futanari", "pegging", "bondage", "deepthroat", "thighjob", "yaoi", "bukkake", "orgy", "grabboobs", "blowjob", "boobjob", "fap", "footjob", "squirting", "anal", "cum", "fuck"];
+
+// 2. Alias en español para que sea más fácil de usar
+const nsfwAlias = {
+    'violar': 'anal', 
+    'coger': 'fuck', 
+    '69': 'sixnine', 
+    'paja': 'fap',
+    'venirse': 'cum', 
+    'mamada': 'blowjob', 
+    'bj': 'blowjob', 
+    'rusa': 'boobjob',
+    'tijeras': 'yuri', 
+    'nalgada': 'spank', 
+    'encuerar': 'undress', 
+    'squirt': 'squirting'
+};
+
+// 3. Detectamos si el mensaje es uno de estos comandos
+const apiAction = nsfwAlias[command] || (nsfwActions.includes(command) ? command : null);
+
+if (apiAction) {
+    // Filtro SFW para que no te quemen el bot en grupos familiares
+    if (isGroup && db.groups[from]?.sfw) {
+        return sock.sendMessage(from, { text: '🚫 *Modo SFW activo:* Pórtense bien, parientes.' }, { quoted: m });
+    }
+
+    try {
+        const apiKey = 'api-qG4nw'; // Tu llave de Stellar
+        const emisor = m.pushName || 'Usuario';
+        
+        // Buscamos a quién etiquetaron o a quién le respondieron
+        let personaEtiquetada = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || 
+                                m.message?.extendedTextMessage?.contextInfo?.participant || null;
+        let textoMencion = personaEtiquetada ? `@${personaEtiquetada.split('@')[0]}` : "a todos";
+
+        // Llamada a la API de Stellar
+        const response = await axios.get(`https://api.stellarwa.xyz/nsfw/interaction?inter=${apiAction}&key=${apiKey}`);
+        const gifUrl = response.data.result;
+
+        if (!gifUrl) throw new Error("Link no encontrado en la API");
+
+        // Mensajes personalizados según la acción
+       const frases = {
+            spank: `✋ *${emisor}* le arrimó un nalgadón marca diablo a ${textoMencion}!`,
+            undress: `😏 *${emisor}* está dejando encueradito(a) a ${textoMencion}...`,
+            yuri: `👩‍❤️‍💋‍👩 *${emisor}* está haciendo unas tijeras bien intensas con ${textoMencion}!`,
+            sixnine: `🔄 *${emisor}* y ${textoMencion} se están dando un 69 bien sabroso!`,
+            anal: `🍑 *${emisor}* le dio por el nudo de globo a ${textoMencion}!`,
+            fuck: `🔥 *${emisor}* se está cogiendo rico a ${textoMencion}!`,
+            cummouth: `👅 *${emisor}* le llenó la boquita de leche a ${textoMencion}!`,
+            suckboobs: `🍼 *${emisor}* le está amamantando las nenas a ${textoMencion}!`,
+            cumshot: `💦 *${emisor}* le dio un baño de pintura blanca a ${textoMencion}!`,
+            lickpussy: `🐱 *${emisor}* le está dando una buena lamida de sapito a ${textoMencion}!`,
+            lickdick: `🍌 *${emisor}* está saboreando el "amigo" de ${textoMencion}!`,
+            lickass: `👅 *${emisor}* le está limpiando el asterisco a ${textoMencion}!`,
+            handjob: `✊ *${emisor}* le está haciendo una paja de campeonato a ${textoMencion}!`,
+            grope: `👋 *${emisor}* le está arrimando un buen manoseo a ${textoMencion}!`,
+            cum: `💦 *${emisor}* se vino todito sobre ${textoMencion}!`,
+            fingering: `✌️ *${emisor}* le está metiendo los dedos hasta el fondo a ${textoMencion}!`,
+            creampie: `🥧 *${emisor}* le dejó un pastelito de crema adentro a ${textoMencion}!`,
+            facesitting: `🪑 *${emisor}* le está usando la cara de silla a ${textoMencion}!`,
+            futanari: `🧬 *${emisor}* le enseñó su "sorpresa" a ${textoMencion}!`,
+            pegging: `🍆 *${emisor}* le dio una probadita de su propio chocolate a ${textoMencion}!`,
+            bondage: `⛓️ *${emisor}* dejó bien amarradito(a) y sin escape a ${textoMencion}!`,
+            deepthroat: `🐍 *${emisor}* se la tragó todita hasta la garganta a ${textoMencion}!`,
+            thighjob: `🦵 *${emisor}* le está dando entre las piernas a ${textoMencion}!`,
+            yaoi: `👬 *${emisor}* y ${textoMencion} están en un momento muy "bro"...`,
+            bukkake: `🥛 *${emisor}* y sus compas bañaron en leche a ${textoMencion}!`,
+            orgy: `👯‍♂️ *${emisor}* se metió en una orgía con ${textoMencion} y medio mundo!`,
+            grabboobs: `🍒 *${emisor}* le agarró las nenas con ganas a ${textoMencion}!`,
+            blowjob: `👅 *${emisor}* le está dando una mamada de leyenda a ${textoMencion}!`,
+            boobjob: `🍒 *${emisor}* le está haciendo una rusa fenomenal a ${textoMencion}!`,
+            fap: `✊ *${emisor}* se está haciendo una paja pensando en ${textoMencion}!`,
+            footjob: `👣 *${emisor}* le está haciendo una paja con los pies a ${textoMencion}!`,
+            squirting: `🌊 *${emisor}* hizo que ${textoMencion} mojara hasta las sábanas!`
+        };
+        const caption = frases[apiAction] || `🔞 *${emisor}* está haciendo ${apiAction} con ${textoMencion}!`;
+
+        // Enviamos el video como GIF
+        await sock.sendMessage(from, { 
+            video: { url: gifUrl }, 
+            caption: caption,
+            gifPlayback: true,
+            mentions: personaEtiquetada ? [personaEtiquetada] : [] 
+        }, { quoted: m });
+
+        return; //
+        
+    } catch (e) {
+        console.error(`ERROR EN NSFW:`, e.message);
+        await sock.sendMessage(from, { text: '❌ La API de Stellar anda lenta o el link falló. Intenta de nuevo.' });
+    }
+}
+
+        //////////
+
        switch (command) {
 
 case 'play': case 'playlist': { 
@@ -1040,99 +1142,7 @@ break;
 
 /////////
 
-// 1. Lista maestra de lo que acepta la API (Sin repetir los que ya tenías como comandos sueltos)
-const nsfwActions = ["spank", "undress", "yuri", "sixnine", "cummouth", "suckboobs", "cumshot", "lickpussy", "lickdick", "lickass", "handjob", "grope", "fingering", "creampie", "facesitting", "futanari", "pegging", "bondage", "deepthroat", "thighjob", "yaoi", "bukkake", "orgy", "grabboobs", "blowjob", "boobjob", "fap", "footjob", "squirting", "anal", "cum", "fuck"];
 
-// 2. Alias en español para que sea más fácil de usar
-const nsfwAlias = {
-    'violar': 'anal', 
-    'coger': 'fuck', 
-    '69': 'sixnine', 
-    'paja': 'fap',
-    'venirse': 'cum', 
-    'mamada': 'blowjob', 
-    'bj': 'blowjob', 
-    'rusa': 'boobjob',
-    'tijeras': 'yuri', 
-    'nalgada': 'spank', 
-    'encuerar': 'undress', 
-    'squirt': 'squirting'
-};
-
-// 3. Detectamos si el mensaje es uno de estos comandos
-const apiAction = nsfwAlias[command] || (nsfwActions.includes(command) ? command : null);
-
-if (apiAction) {
-    // Filtro SFW para que no te quemen el bot en grupos familiares
-    if (isGroup && db.groups[from]?.sfw) {
-        return sock.sendMessage(from, { text: '🚫 *Modo SFW activo:* Pórtense bien, parientes.' }, { quoted: m });
-    }
-
-    try {
-        const apiKey = 'api-qG4nw'; // Tu llave de Stellar
-        const emisor = m.pushName || 'Usuario';
-        
-        // Buscamos a quién etiquetaron o a quién le respondieron
-        let personaEtiquetada = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || 
-                                m.message?.extendedTextMessage?.contextInfo?.participant || null;
-        let textoMencion = personaEtiquetada ? `@${personaEtiquetada.split('@')[0]}` : "a todos";
-
-        // Llamada a la API de Stellar
-        const response = await axios.get(`https://api.stellarwa.xyz/nsfw/interaction?inter=${apiAction}&key=${apiKey}`);
-        const gifUrl = response.data.result;
-
-        if (!gifUrl) throw new Error("Link no encontrado en la API");
-
-        // Mensajes personalizados según la acción
-       const frases = {
-            spank: `✋ *${emisor}* le arrimó un nalgadón marca diablo a ${textoMencion}!`,
-            undress: `😏 *${emisor}* está dejando encueradito(a) a ${textoMencion}...`,
-            yuri: `👩‍❤️‍💋‍👩 *${emisor}* está haciendo unas tijeras bien intensas con ${textoMencion}!`,
-            sixnine: `🔄 *${emisor}* y ${textoMencion} se están dando un 69 bien sabroso!`,
-            anal: `🍑 *${emisor}* le dio por el nudo de globo a ${textoMencion}!`,
-            fuck: `🔥 *${emisor}* se está cogiendo rico a ${textoMencion}!`,
-            cummouth: `👅 *${emisor}* le llenó la boquita de leche a ${textoMencion}!`,
-            suckboobs: `🍼 *${emisor}* le está amamantando las nenas a ${textoMencion}!`,
-            cumshot: `💦 *${emisor}* le dio un baño de pintura blanca a ${textoMencion}!`,
-            lickpussy: `🐱 *${emisor}* le está dando una buena lamida de sapito a ${textoMencion}!`,
-            lickdick: `🍌 *${emisor}* está saboreando el "amigo" de ${textoMencion}!`,
-            lickass: `👅 *${emisor}* le está limpiando el asterisco a ${textoMencion}!`,
-            handjob: `✊ *${emisor}* le está haciendo una paja de campeonato a ${textoMencion}!`,
-            grope: `👋 *${emisor}* le está arrimando un buen manoseo a ${textoMencion}!`,
-            cum: `💦 *${emisor}* se vino todito sobre ${textoMencion}!`,
-            fingering: `✌️ *${emisor}* le está metiendo los dedos hasta el fondo a ${textoMencion}!`,
-            creampie: `🥧 *${emisor}* le dejó un pastelito de crema adentro a ${textoMencion}!`,
-            facesitting: `🪑 *${emisor}* le está usando la cara de silla a ${textoMencion}!`,
-            futanari: `🧬 *${emisor}* le enseñó su "sorpresa" a ${textoMencion}!`,
-            pegging: `🍆 *${emisor}* le dio una probadita de su propio chocolate a ${textoMencion}!`,
-            bondage: `⛓️ *${emisor}* dejó bien amarradito(a) y sin escape a ${textoMencion}!`,
-            deepthroat: `🐍 *${emisor}* se la tragó todita hasta la garganta a ${textoMencion}!`,
-            thighjob: `🦵 *${emisor}* le está dando entre las piernas a ${textoMencion}!`,
-            yaoi: `👬 *${emisor}* y ${textoMencion} están en un momento muy "bro"...`,
-            bukkake: `🥛 *${emisor}* y sus compas bañaron en leche a ${textoMencion}!`,
-            orgy: `👯‍♂️ *${emisor}* se metió en una orgía con ${textoMencion} y medio mundo!`,
-            grabboobs: `🍒 *${emisor}* le agarró las nenas con ganas a ${textoMencion}!`,
-            blowjob: `👅 *${emisor}* le está dando una mamada de leyenda a ${textoMencion}!`,
-            boobjob: `🍒 *${emisor}* le está haciendo una rusa fenomenal a ${textoMencion}!`,
-            fap: `✊ *${emisor}* se está haciendo una paja pensando en ${textoMencion}!`,
-            footjob: `👣 *${emisor}* le está haciendo una paja con los pies a ${textoMencion}!`,
-            squirting: `🌊 *${emisor}* hizo que ${textoMencion} mojara hasta las sábanas!`
-        };
-        const caption = frases[apiAction] || `🔞 *${emisor}* está haciendo ${apiAction} con ${textoMencion}!`;
-
-        // Enviamos el video como GIF
-        await sock.sendMessage(from, { 
-            video: { url: gifUrl }, 
-            caption: caption,
-            gifPlayback: true,
-            mentions: personaEtiquetada ? [personaEtiquetada] : [] 
-        }, { quoted: m });
-
-    } catch (e) {
-        console.error(`ERROR EN NSFW:`, e.message);
-        await sock.sendMessage(from, { text: '❌ La API de Stellar anda lenta o el link falló. Intenta de nuevo.' });
-    }
-}
 
 /////////
 
