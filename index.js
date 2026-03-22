@@ -1240,38 +1240,28 @@ break;
 /////////
 
 case 'code': case 'serbot': {
-    // 1. Importamos la función con require (estilo CommonJS)
     const { startSubBot } = require('./subbot.js'); 
 
-    // 2. BUSCAMOS EL REMITENTE (m.sender) DE FORMA SEGURA
-    // Intentamos varias formas por si una falla
+    // Validación segura para evitar el error del split
     const sender = m.sender || m.key.participant || m.key.remoteJid || '';
-    
-    if (!sender || !sender.includes('@')) {
-        return sock.sendMessage(m.key.remoteJid, { text: "❌ No pude detectar tu número automáticamente." }, { quoted: m });
-    }
+    if (!sender || !sender.includes('@')) return; // Si no hay sender, ignoramos para que no truene
 
-    // 3. Limpiamos el número para que sea puro dígito
     const phone = sender.split('@')[0].replace(/[^0-9]/g, ''); 
     const chatId = m.key.remoteJid;
 
     try {
-        // 4. Avisamos al usuario con mención
         await sock.sendMessage(chatId, { 
-            text: `⏳ *@${phone}*, estoy generando tu código de vinculación. Espera unos segundos...`,
+            text: `⏳ *@${phone}*, generando tu código...`,
             mentions: [sender]
         }, { quoted: m });
 
-        // 5. Arrancamos el proceso en subbot.js
         await startSubBot(m, sock, phone); 
         
     } catch (e) {
         console.error("Error en comando .code:", e);
-        await sock.sendMessage(chatId, { text: "❌ Hubo un fallo al generar el código." });
     }
 }
 break;
-
 
 /////////
 
