@@ -485,7 +485,7 @@ case 'fuck': {
             
             await sock.sendMessage(from, { 
                 video: { url: gifUrl }, 
-                caption: `🖕 *${emisor}* mandó a volar a ${textoMencion}!`,
+                caption: `🖕 *${emisor}* se cogio a  ${textoMencion}!`,
                 gifPlayback: true,
                 mentions: personaEtiquetada ? [personaEtiquetada] : [] 
             }, { quoted: m });
