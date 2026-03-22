@@ -1440,6 +1440,8 @@ break;
 case 'tt': case 'tiktok': {
     if (!text) return sock.sendMessage(from, { text: '¿Qué buscamos en TikTok? Ejemplo: .tt pvta luna' });
 
+    // Reacción de búsqueda
+    await sock.sendMessage(from, { react: { text: "🔍", key: m.key } });
     await sock.sendMessage(from, { text: `🔍 *Buscando los 5 mejores videos de:* _${text}_...` });
 
     try {
@@ -1451,7 +1453,7 @@ case 'tt': case 'tiktok': {
             params: {
                 keywords: text,
                 region: 'mx',
-                count: '5' // Pedimos 5 resultados a la API
+                count: '5' 
             },
             headers: {
                 'x-rapidapi-key': 'e774e5f65fmsh8a64771078f8baap19a40cjsn79a68c1e252f',
@@ -1463,33 +1465,53 @@ case 'tt': case 'tiktok': {
         const listaVideos = response.data.data.videos; 
 
         if (!listaVideos || listaVideos.length === 0) {
+            await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
             return sock.sendMessage(from, { text: '❌ No hallé resultados para esa búsqueda.' });
         }
 
-        // Limitamos a 5 por si la API manda más
         const top5 = listaVideos.slice(0, 5);
-        await sock.sendMessage(from, { text: `✅ ¡Encontrados! Mandando ${top5.length} videos sin marca de agua...` });
-
+        
         for (let i = 0; i < top5.length; i++) {
-            const videoData = top5[i];
-            const videoUrl = videoData.play; 
-            const title = videoData.title || 'TikTok Video';
-            const author = videoData.author?.nickname || 'Usuario';
+            const v = top5[i];
+            
+            // Adaptamos las variables de tu API al diseño estético
+            const title = v.title || 'Sin título';
+            const author = v.author?.nickname || v.author?.unique_id || 'Desconocido';
+            const duration = v.duration || 'N/A';
+            const likes = (v.digg_count || 0).toLocaleString();
+            const comments = (v.comment_count || 0).toLocaleString();
+            const views = (v.play_count || 0).toLocaleString();
+            const shares = (v.share_count || 0).toLocaleString();
+            const created_at = v.create_time ? new Date(v.create_time * 1000).toLocaleDateString('es-MX') : 'N/A';
+            const videoUrl = v.play; // Link sin marca de agua
 
-            // Enviamos el video
+            const caption = `ㅤ۟∩　ׅ　★ ໌　ׅ　🅣𝗂𝗄𝖳𝗈𝗄 🅓ownload [${i + 1}/5]　ׄᰙ
+
+𖣣ֶㅤ֯⌗ ✎  ׄ ⬭ *Título:* ${title}
+𖣣ֶㅤ֯⌗ ꕥ  ׄ ⬭ *Autor:* ${author}
+𖣣ֶㅤ֯⌗ ⴵ  ׄ ⬭ *Duración:* ${duration}s
+𖣣ֶㅤ֯⌗ ❖  ׄ ⬭ *Likes:* ${likes}
+𖣣ֶㅤ֯⌗ ❀  ׄ ⬭ *Comentarios:* ${comments}
+𖣣ֶㅤ֯⬭ ✿  ׄ ⬭ *Vistas:* ${views}
+𖣣ֶㅤ֯⌗ ☆  ׄ ⬭ *Compartidos:* ${shares}
+𖣣ֶㅤ֯⌗ ☁︎  ׄ ⬭ *Fecha:* ${created_at}`.trim();
+
+            // Enviamos el video con la nueva caption
             await sock.sendMessage(from, { 
                 video: { url: videoUrl }, 
-                caption: `🎥 *Video ${i + 1}/5*\n📝 ${title}\n👤 *Autor:* ${author}` 
+                caption: caption 
             }, { quoted: m });
 
-            // ESPERA DE SEGURIDAD: 2 segundos entre videos para evitar baneos
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Pequeña espera para no saturar WhatsApp
+            await new Promise(resolve => setTimeout(resolve, 1500));
         }
 
-        await sock.sendMessage(from, { text: '🏁 *Ráfaga completada.* ¡Ahí quedaron, compa!' });
+        await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
+        await sock.sendMessage(from, { text: '🏁 *Ráfaga completada.* ¡Ahí quedaron los 5, pariente!' });
 
     } catch (error) {
         console.error("ERROR TIKTOK RÁFAGA:", error);
+        await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
         await sock.sendMessage(from, { text: '❌ Hubo un error al procesar la ráfaga de videos.' });
     }
 }
