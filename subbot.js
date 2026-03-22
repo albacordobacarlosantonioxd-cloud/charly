@@ -3,90 +3,104 @@ const pino = require('pino');
 const fs = require('fs-extra');
 const chalk = require('chalk');
 
-// Nota: El 'main' lo cargamos después para evitar errores de referencia circular
+// Evitamos que explote si no hay conexiones globales
 if (!global.conns) global.conns = [];
 
 async function startSubBot(m, client, phone) {
-    const userJid = m.sender.split('@')[0];
-    const sessionFolder = `./Sessions/Subs/${userJid}`;
-
-    // Crear carpeta si no existe
-    if (!fs.existsSync(sessionFolder)) {
-        fs.mkdirSync(sessionFolder, { recursive: true });
-    }
-
-    const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
-    const { version } = await fetchLatestBaileysVersion();
-
-    const sock = makeWASocket({
-        logger: pino({ level: 'silent' }),
-        printQRInTerminal: false,
-        browser: Browsers.macOS('Chrome'), 
-        auth: state,
-        version,
-        markOnlineOnConnect: true,
-    });
-
-    // --- GENERAR CÓDIGO AUTOMÁTICO ---
-    if (!sock.authState.creds.registered) {
-        setTimeout(async () => {
-            try {
-                let code = await sock.requestPairingCode(phone);
-                code = code?.match(/.{1,4}/g)?.join("-") || code;
-                
-                const texto = `✅ *CÓDIGO DE SUB-BOT*\n\nUsa este código para vincularte:\n\n1. Ve a "Dispositivos vinculados"\n2. Selecciona "Vincular con el número de teléfono"\n3. Escribe este código:\n\n*${code}*`;
-                
-                await client.sendMessage(m.chat, { text: texto, mentions: [m.sender] }, { quoted: m });
-            } catch (err) {
-                console.error("Error al generar Pairing Code:", err);
-            }
-        }, 3000); 
-    }
-
-    sock.ev.on('creds.update', saveCreds);
-
-    sock.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
-        if (connection === 'open') {
-            sock.isInit = true;
-            if (!global.conns.find(c => c.user?.id === sock.user?.id)) global.conns.push(sock);
-            console.log(chalk.green(`\n[ SUB-BOT ] Conectado: ${sock.user.id}`));
-            await client.sendMessage(m.chat, { text: `✅ ¡Sub-Bot conectado con éxito!` }, { quoted: m });
+    try {
+        // --- 🛡️ EXTRACCIÓN SEGURA DEL ID (REPARADO) ---
+        // Buscamos el ID en m.sender, o en el JID del chat, o usamos el phone directo
+        const rawSender = m?.sender || m?.key?.remoteJid || (phone ? `${phone}@s.whatsapp.net` : null);
+        
+        if (!rawSender) {
+            console.log(chalk.red('[ ERROR ] No se pudo determinar el ID del usuario.'));
+            return;
         }
 
-        if (connection === 'close') {
-            const reason = lastDisconnect?.error?.output?.statusCode;
-            if (reason !== DisconnectReason.loggedOut) {
-                startSubBot(m, client, phone);
-            } else {
-                fs.rmSync(sessionFolder, { recursive: true, force: true });
-                console.log(chalk.red(`[ SUB-BOT ] Sesión de ${userJid} eliminada.`));
-            }
-        }
-    });
+        const userJid = rawSender.split('@')[0]; // Aquí ya no dará error porque rawSender está validado
+        const sessionFolder = `./Sessions/Subs/${userJid}`;
 
-    // --- PROCESAR MENSAJES ---
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify') return;
-        for (let raw of messages) {
-            try {
-                // Aquí cargamos tu lógica principal
-                // Si tu archivo principal se llama index.js, cámbialo aquí:
-                const main = require('./index.js'); 
-                
-                // Si exportaste tu función como 'main', se usa así:
-                if (typeof main === 'function') {
-                    await main(sock, raw, messages);
-                } else if (main.main) {
-                    await main.main(sock, raw, messages);
+        console.log(chalk.blue(`[ DEBUG ] Iniciando sesión para: ${userJid}`));
+
+        // Crear carpeta de sesión si no existe
+        if (!fs.existsSync(sessionFolder)) {
+            fs.mkdirSync(sessionFolder, { recursive: true });
+        }
+
+        const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
+        const { version } = await fetchLatestBaileysVersion();
+
+        const sock = makeWASocket({
+            logger: pino({ level: 'silent' }),
+            printQRInTerminal: false,
+            browser: Browsers.macOS('Chrome'), 
+            auth: state,
+            version,
+            markOnlineOnConnect: true,
+        });
+
+        // --- 🔑 GENERAR CÓDIGO DE VINCULACIÓN ---
+        if (!sock.authState.creds.registered) {
+            setTimeout(async () => {
+                try {
+                    let code = await sock.requestPairingCode(phone);
+                    code = code?.match(/.{1,4}/g)?.join("-") || code;
+                    
+                    const texto = `✅ *TU CÓDIGO DE SUB-BOT*\n\nHola *@${userJid}*, usa este código para vincularte:\n\n1. Ve a "Dispositivos vinculados"\n2. Selecciona "Vincular con el número de teléfono"\n3. Escribe este código:\n\n*${code}*`;
+                    
+                    await client.sendMessage(m.key.remoteJid, { text: texto, mentions: [rawSender] }, { quoted: m });
+                } catch (err) {
+                    console.error("Error al generar Pairing Code:", err);
                 }
-            } catch (e) {
-                console.log(chalk.red(`[ ERROR SUB-BOT ]: ${e.message}`));
-            }
+            }, 3000); 
         }
-    });
 
-    return sock;
+        sock.ev.on('creds.update', saveCreds);
+
+        sock.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
+            if (connection === 'open') {
+                sock.isInit = true;
+                if (!global.conns.find(c => c.user?.id === sock.user?.id)) {
+                    global.conns.push(sock);
+                }
+                console.log(chalk.green(`\n[ ✅ ] SUB-BOT CONECTADO: ${sock.user.id}`));
+                await client.sendMessage(m.key.remoteJid, { text: `✅ ¡Felicidades! Ya eres un Sub-Bot activo.` });
+            }
+
+            if (connection === 'close') {
+                const reason = lastDisconnect?.error?.output?.statusCode;
+                if (reason !== DisconnectReason.loggedOut) {
+                    console.log(chalk.yellow(`[ ⚠️ ] Reconectando Sub-Bot: ${userJid}`));
+                    startSubBot(m, client, phone);
+                } else {
+                    fs.rmSync(sessionFolder, { recursive: true, force: true });
+                    console.log(chalk.red(`[ ❌ ] Sesión eliminada para: ${userJid}`));
+                }
+            }
+        });
+
+        // --- 🧠 CEREBRO COMPARTIDO (EJECUTA TUS COMANDOS) ---
+        sock.ev.on('messages.upsert', async ({ messages, type }) => {
+            if (type !== 'notify') return;
+            for (let raw of messages) {
+                try {
+                    // Importamos tu lógica principal del index.js
+                    // Asegúrate de que tu index.js tenga: module.exports = { main }
+                    const handler = require('./index.js');
+                    const mainFunc = handler.main || handler.default || handler;
+
+                    if (typeof mainFunc === 'function') {
+                        await mainFunc(sock, raw, messages);
+                    }
+                } catch (e) {
+                    console.log(chalk.red(`[ ERROR SUB-BOT LOGIC ]: ${e.message}`));
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error("Error crítico en startSubBot:", error);
+    }
 }
 
-// Exportamos la función al estilo antiguo (CommonJS)
 module.exports = { startSubBot };
