@@ -739,40 +739,52 @@ break;
 
 case 'video': case 'ytvideo': {
     if (!text) return sock.sendMessage(from, { text: '¿Qué video buscamos, pariente? Pasa el nombre o link.' });
-    await sock.sendMessage(from, { text: '🎥 *Preparando video...* Esto puede tardar un poco por el peso.' });
-
+    
     try {
         const yts = require('yt-search');
         const axios = require('axios');
-        const search = await yts(text);
-        if (!search.videos.length) return sock.sendMessage(from, { text: '❌ No hallé el video.' });
-        
-        const video = search.videos[0];
-        const res = await axios.get(`https://sylphy.xyz/download/ytmp4?url=${encodeURIComponent(video.url)}&api_key=sylphy-ty5xtWm`);
-        
+        let videoUrl = '';
+        let videoTitle = 'Video';
+
+        // 1. ¿ES UN LINK O ES TEXTO?
+        if (text.includes('youtu.be') || text.includes('youtube.com')) {
+            videoUrl = text.trim(); // Si es link, lo usamos directo
+            // (Opcional) Buscamos info rápido para tener el título real
+            const info = await yts({ videoId: yts.parseVideoId(videoUrl) });
+            videoTitle = info?.title || 'Video de YouTube';
+        } else {
+            // Si es texto, buscamos el video
+            await sock.sendMessage(from, { text: '🔍 *Buscando video...*' });
+            const search = await yts(text);
+            if (!search.videos.length) return sock.sendMessage(from, { text: '❌ No hallé el video.' });
+            videoUrl = search.videos[0].url;
+            videoTitle = search.videos[0].title;
+        }
+
+        await sock.sendMessage(from, { text: `🎥 *Preparando:* ${videoTitle}\n_Esto puede tardar según el peso..._` });
+
+        // 2. LLAMADA A LA API DE SYLPHY
+        const res = await axios.get(`https://sylphy.xyz/download/ytmp4?url=${encodeURIComponent(videoUrl)}&api_key=sylphy-ty5xtWm`);
         const dl_url = res.data.result?.dl_url;
 
         if (dl_url) {
-            // REFUERZO: Enviamos el video con un User-Agent para que no lo bloqueen
             await sock.sendMessage(from, { 
                 video: { 
                     url: dl_url,
-                    // Esto ayuda a que el servidor de la API acepte la descarga
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                     }
                 }, 
-                caption: `✅ *${video.title}*\n\n_Si no se descarga, es que el archivo pesa más de lo que permite WhatsApp._`,
+                caption: `✅ *${videoTitle}*\n\n_Disfrútalo, pariente._`,
                 mimetype: 'video/mp4',
-                fileName: `${video.title}.mp4`
+                fileName: `${videoTitle}.mp4`
             }, { quoted: m });
         } else {
             throw new Error("API no devolvió link");
         }
     } catch (e) {
         console.error("ERROR VIDEO:", e);
-        // Si falla la descarga directa, le mandamos el link al usuario para que no se quede sin nada
-        await sock.sendMessage(from, { text: '❌ El servidor de descarga está saturado. Intenta de nuevo en unos segundos.' });
+        await sock.sendMessage(from, { text: '❌ El servidor de descarga falló o el video es muy pesado. Intenta con otro.' });
     }
 }
 break;
