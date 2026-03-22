@@ -1485,12 +1485,26 @@ case 'translate': case 'say': case 'decir': {
 break;
 
 
-            // --- ADMIN ---
-            case 'tag':
+case 'tag': {
                 if (!isAdmin) return;
+                
                 const meta = await sock.groupMetadata(from);
-                await sock.sendMessage(from, { text: `${text}`, mentions: meta.participants.map(p => p.id) });
+                const participants = meta.participants.map(p => p.id);
+                
+                // 1. Buscamos el contenido: 
+                // Primero lo que escribiste, si no, lo que dice el mensaje citado
+                const content = text || (m.message?.extendedTextMessage?.contextInfo?.quotedMessage?.conversation || 
+                                         m.message?.extendedTextMessage?.contextInfo?.quotedMessage?.extendedTextMessage?.text);
+
+                if (!content) return sock.sendMessage(from, { text: '《✧》 Escribe algo o responde a un mensaje para taggear a todos.' });
+
+                // 2. Enviamos el mensaje mencionando a todos
+                await sock.sendMessage(from, { 
+                    text: content, 
+                    mentions: participants 
+                });
                 break;
+            }
             case 'kick':
                 if (!isAdmin) return;
                 const toKick = m.message.extendedTextMessage?.contextInfo?.participant || text.replace(/\D/g,'') + '@s.whatsapp.net';
