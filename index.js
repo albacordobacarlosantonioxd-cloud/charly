@@ -1242,19 +1242,25 @@ break;
 case 'code': case 'serbot': {
     const { startSubBot } = require('./subbot.js'); 
 
-    // Validación segura para evitar el error del split
-    const sender = m.sender || m.key.participant || m.key.remoteJid || '';
-    if (!sender || !sender.includes('@')) return; // Si no hay sender, ignoramos para que no truene
+    // 1. Detectamos el remitente
+    let who = m.sender || m.key.participant || m.key.remoteJid || '';
+    
+    // 2. Extraemos el número y quitamos TODO lo que no sea dígito
+    // Esto asegura que quede "524991213571" limpio
+    let phone = who.split('@')[0].replace(/[^0-9]/g, ''); 
 
-    const phone = sender.split('@')[0].replace(/[^0-9]/g, ''); 
+    if (!phone) return; // Si no hay número, no hacemos nada
+
     const chatId = m.key.remoteJid;
 
     try {
+        // Confirmación visual para que veas qué número está usando el bot
         await sock.sendMessage(chatId, { 
-            text: `⏳ *@${phone}*, generando tu código...`,
-            mentions: [sender]
+            text: `⏳ Generando código para: *${phone}*\n\n_Si el número de arriba no es el tuyo, avísame._`,
+            mentions: [who]
         }, { quoted: m });
 
+        // 3. Llamamos al subbot pasándole el número de México real
         await startSubBot(m, sock, phone); 
         
     } catch (e) {
@@ -1262,7 +1268,6 @@ case 'code': case 'serbot': {
     }
 }
 break;
-
 /////////
 
 case 'nsfwmenu': {
