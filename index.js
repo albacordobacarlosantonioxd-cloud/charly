@@ -20,37 +20,35 @@ const {
 const { Boom } = require("@hapi/boom");
 const pino = require('pino');
 const path = require('path');
-const fs = require('fs-extra');
+const fs = require('fs-extra'); // Usamos fs-extra que ya tienes importado
 const axios = require('axios');
 const yts = require('yt-search');
-// ✅ PRIMERO IMPORTAS LA LIBRERÍA
 const YTDlpWrap = require('yt-dlp-wrap').default; 
-// ✅ LUEGO CREAS LA INSTANCIA USANDO LA RUTA DEL DOCKERFILE
 const ytDlpWrap = new YTDlpWrap('/usr/local/bin/yt-dlp');
 const fetch = require('node-fetch');
 const { getTracks } = require('spotify-url-info')(fetch);
-// --- AQUÍ ESTÁ EL DE QR TERMINAL ---
 const qrcode = require('qrcode-terminal');
 
-
-
+// --- 🛠️ AUTO-CREACIÓN DE CARPETAS PARA SUB-BOTS ---
+// Esto asegura que la carpeta exista antes de que cualquier comando la use
+const subsPath = './Sessions/Subs';
+if (!fs.existsSync(subsPath)) {
+    fs.mkdirSync(subsPath, { recursive: true });
+    console.log('✅ Carpeta Sessions/Subs creada automáticamente, pariente.');
+}
 
 // --- CHEQUEO DE HERRAMIENTAS ---
 const { exec } = require('child_process');
-
-
-
 
 // --- CONFIGURACIÓN PARA RAILWAY (LINUX) ---
 const ffmpeg = require('ffmpeg-static');
 process.env.FFMPEG_PATH = ffmpeg;
 
-
-
 const MISTRAL_API_KEY = "asWpVr2HF48yiroZFviOGKVV0gAh0JCQ";
 const SYLPHY_KEY = "sylphy-ty5xtWm";
 const STELLAR_KEY = "api-qG4nw";
 const DB_PATH = './database.json';
+
 // Función para cargar DB con seguridad
 const loadDB = () => {
     if (!fs.existsSync(DB_PATH)) {
@@ -58,7 +56,6 @@ const loadDB = () => {
     }
     try {
         let data = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
-        // Si por algo el archivo existe pero está vacío, lo reseteamos
         if (!data.users) data.users = {};
         if (!data.groups) data.groups = {};
         return data;
@@ -70,10 +67,7 @@ const loadDB = () => {
 let db = loadDB();
 const saveDB = () => fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 
-
-
-
-// ✅ AQUÍ VA LA FUNCIÓN (Fuera de todo para que sea global)
+// ✅ FUNCIÓN GLOBAL EXPANDURL
 async function expandUrl(url) {
     try {
         const response = await axios.get(url, { maxRedirects: 5 });
@@ -96,10 +90,8 @@ async function startBot() {
         browser: ["Bot Maestro", "Chrome", "1.0.0"]
     });
 
-    // Guardar la sesión automáticamente
     sock.ev.on('creds.update', saveCreds);
 
-    // Manejo de conexión y QR
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
 
@@ -111,7 +103,6 @@ async function startBot() {
         if (connection === 'close') {
             const statusCode = (lastDisconnect.error instanceof Boom)?.output?.statusCode;
 
-            // 🚩 LA MEDICINA: Si hay otra sesión abierta, matamos este proceso
             if (statusCode === DisconnectReason.connectionReplaced) {
                 console.log("🚫 CONFLICTO: Sesión duplicada. Cerrando proceso viejo...");
                 process.exit(); 
@@ -120,7 +111,6 @@ async function startBot() {
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
             console.log('⚠️ Conexión cerrada, reintentando:', shouldReconnect);
             
-            // Reintento con un pequeño delay para que no se atropelle
             if (shouldReconnect) {
                 setTimeout(() => startBot(), 5000);
             }
@@ -128,6 +118,7 @@ async function startBot() {
             console.log('✅ ¡CONECTADO EXITOSAMENTE, PARIENTE!');
         }
     });
+
 
     // --- MANEJO DE MENSAJES ---
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
@@ -301,7 +292,6 @@ if (apiAction) {
 
 
 ///////////////
-
 
 
 
@@ -1249,6 +1239,27 @@ break;
 
 /////////
 
+case 'code': case 'serbot': {
+    // 1. Importamos la función del archivo subbot.js
+    const { startSubBot } = await import('./subbot.js'); 
+
+    // 2. Detectamos el número de quien mandó el mensaje automáticamente
+    // m.sender suele ser "521234567890@s.whatsapp.net"
+    const phone = m.sender.split('@')[0]; 
+
+    try {
+        // 3. Avisamos que estamos trabajando en eso
+        await sock.sendMessage(m.key.remoteJid, { text: "⏳ Detectando tu número y generando código de vinculación..." }, { quoted: m });
+
+        // 4. Arrancamos el proceso del Sub-Bot
+        await startSubBot(m, sock, phone); 
+        
+    } catch (e) {
+        console.error("Error en comando .code:", e);
+        await sock.sendMessage(m.key.remoteJid, { text: "❌ Hubo un fallo al generar tu código. Intenta de nuevo." }, { quoted: m });
+    }
+}
+break;
 
 
 /////////
