@@ -47,7 +47,7 @@ process.env.FFMPEG_PATH = ffmpeg;
 
 
 
-const MISTRAL_KEY = "asWpVr2HF48yiroZFviOGKVV0gAh0JCQ"; 
+const MISTRAL_API_KEY = "asWpVr2HF48yiroZFviOGKVV0gAh0JCQ";
 const SYLPHY_KEY = "sylphy-ty5xtWm";
 const STELLAR_KEY = "api-qG4nw";
 const DB_PATH = './database.json';
