@@ -61,6 +61,7 @@ const loadDB = () => {
 
 let db = loadDB();
 const saveDB = () => fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+if (!global.proposals) global.proposals = {};
 
 // ✅ FUNCIÓN GLOBAL EXPANDURL
 async function expandUrl(url) {
@@ -1977,6 +1978,88 @@ case 'daily': case 'diario': {
     }
 
     await sock.sendMessage(from, { text: texto }, { quoted: m });
+}
+break;
+/////////////
+
+case 'marry': case 'casarse': {
+    const proposer = sender; 
+    // Captura mención de mensaje normal o de un mensaje respondido
+    const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || m.message?.extendedTextMessage?.contextInfo?.participant;
+    
+    if (!mentioned) return await sock.sendMessage(from, { text: '《✧》 Menciona al usuario al que deseas proponer matrimonio.' }, { quoted: m });
+    if (proposer === mentioned) return await sock.sendMessage(from, { text: '《✧》 No puedes proponerte matrimonio a ti mismo.' }, { quoted: m });
+    
+    // ESTOS IF SON LOS IMPORTANTES: Si el usuario no existe en la DB, lo crean vacío para que no dé error
+    if (!db.users[proposer]) db.users[proposer] = {};
+    if (!db.users[mentioned]) db.users[mentioned] = {};
+
+    // Revisar si ya están casados en tu database.json
+    if (db.users[proposer].marry) return await sock.sendMessage(from, { text: `《✧》 Ya estás casado, pariente.` }, { quoted: m });
+    if (db.users[mentioned].marry) return await sock.sendMessage(from, { text: `《✧》 Esa persona ya está casada.` }, { quoted: m });
+
+    // Guardar propuesta en la RAM (global.proposals)
+    global.proposals[mentioned] = proposer;
+
+    await sock.sendMessage(from, { 
+        text: `✎ @${mentioned.split('@')[0]}, el usuario @${proposer.split('@')[0]} te ha enviado una propuesta de matrimonio.\n\n⚘ *Responde con:*\n> ❀ *.acept* para confirmar.\n> ❀ La propuesta expirará en 2 minutos.`,
+        mentions: [proposer, mentioned]
+    }, { quoted: m });
+
+    // Temporizador para borrar la propuesta si no aceptan
+    setTimeout(() => { 
+        if (global.proposals[mentioned]) delete global.proposals[mentioned]; 
+    }, 120000);
+}
+break;
+
+case 'acept': case 'aceptar': {
+    const proposee = sender; 
+    const proposer = global.proposals[proposee]; 
+
+    if (!proposer) return await sock.sendMessage(from, { text: '《✧》 No tienes propuestas de matrimonio pendientes.' }, { quoted: m });
+
+    // Aseguramos que existan en la DB antes de guardar el casorio
+    if (!db.users[proposer]) db.users[proposer] = {};
+    if (!db.users[proposee]) db.users[proposee] = {};
+
+    // Guardamos el matrimonio permanentemente
+    db.users[proposer].marry = proposee;
+    db.users[proposee].marry = proposer;
+    saveDB(); // <--- Esto lo guarda en tu database.json
+
+    delete global.proposals[proposee]; 
+
+    await sock.sendMessage(from, { 
+        text: `✎ ¡Felicidades! @${proposer.split('@')[0]} y @${proposee.split('@')[0]} ahora están casados. ✨`,
+        mentions: [proposer, proposee]
+    }, { quoted: m });
+}
+break;
+///////////////
+
+case 'divorce': case 'divorciarse': {
+    const user = db.users[sender];
+    const parejaId = user.marry;
+
+    // 1. Verificamos si de verdad está casado
+    if (!parejaId) {
+        return await sock.sendMessage(from, { 
+            text: '《✧》 Pero si estás más solo que la una, pariente. No tienes de quién divorciarte.' 
+        }, { quoted: m });
+    }
+
+    // 2. Borramos el vínculo en ambos usuarios
+    const exPareja = db.users[parejaId];
+    
+    user.marry = ""; // Limpiamos tu perfil
+    if (exPareja) exPareja.marry = ""; // Limpiamos el de tu ex
+    
+    saveDB(); // Guardamos los cambios en el JSON
+
+    await sock.sendMessage(from, { 
+        text: `💔 Te has divorciado legalmente. Ahora vuelves a estar soltero/a.` 
+    }, { quoted: m });
 }
 break;
 
