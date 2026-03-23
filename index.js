@@ -28,7 +28,7 @@ const ytDlpWrap = new YTDlpWrap('/usr/local/bin/yt-dlp');
 const fetch = require('node-fetch');
 const { getTracks } = require('spotify-url-info')(fetch);
 const qrcode = require('qrcode-terminal');
-
+const PDFDocument = require('pdfkit');
 
 
 
@@ -1264,6 +1264,63 @@ case 'nsfwmenu': {
         image: { url: imagenMenu }, 
         caption: menuText 
     }, { quoted: m });
+}
+break;
+////////
+
+case 'manga': {
+    if (!text.includes('http')) return m.reply("🔗 ¡Pásame el link del capítulo de Nanatsu no Taizai, pariente!");
+
+    const tempDir = `./temp_manga_${Date.now()}`;
+    const pdfPath = `${tempDir}/capitulo.pdf`;
+
+    try {
+        m.reply("⏳ *Procesando manga...* Estoy creando el PDF, esto puede tardar un poco dependiendo de las páginas.");
+
+        // 1. Obtener los enlaces de las imágenes de la API
+        const response = await axios.get(`https://apis-starlights-team.koyeb.app/starlight/mangadl?url=${text}`);
+        const data = response.data.result;
+        if (!data || !data.pages) return m.reply("❌ No encontré contenido en ese enlace.");
+
+        // Crear carpeta temporal
+        await fs.ensureDir(tempDir);
+
+        // 2. Crear el documento PDF
+        const doc = new PDFDocument({ autoFirstPage: false });
+        const stream = fs.createWriteStream(pdfPath);
+        doc.pipe(stream);
+
+        // 3. Descargar cada imagen y meterla al PDF
+        for (const url of data.pages) {
+            const imgRes = await axios.get(url, { responseType: 'arraybuffer' });
+            const imgBuffer = Buffer.from(imgRes.data);
+            
+            const img = doc.openImage(imgBuffer);
+            doc.addPage({ size: [img.width, img.height] });
+            doc.image(imgBuffer, 0, 0);
+        }
+
+        doc.end();
+
+        // Esperar a que el archivo se termine de escribir
+        stream.on('finish', async () => {
+            // 4. Enviar el PDF al usuario
+            await sock.sendMessage(m.chat, { 
+                document: fs.readFileSync(pdfPath), 
+                fileName: `${data.title}.pdf`, 
+                mimetype: 'application/pdf',
+                caption: `📖 *${data.title}*\n✅ ¡Listo para leer, pariente!`
+            }, { quoted: m });
+
+            // 5. Limpieza total (borrar PDF y carpeta temporal)
+            await fs.remove(tempDir);
+        });
+
+    } catch (e) {
+        console.error(e);
+        m.reply("❌ Hubo un error al generar el PDF. Revisa el link o intenta más tarde.");
+        await fs.remove(tempDir);
+    }
 }
 break;
 
