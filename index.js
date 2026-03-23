@@ -29,13 +29,8 @@ const fetch = require('node-fetch');
 const { getTracks } = require('spotify-url-info')(fetch);
 const qrcode = require('qrcode-terminal');
 
-// --- 🛠️ AUTO-CREACIÓN DE CARPETAS PARA SUB-BOTS ---
-// Esto asegura que la carpeta exista antes de que cualquier comando la use
-const subsPath = './Sessions/Subs';
-if (!fs.existsSync(subsPath)) {
-    fs.mkdirSync(subsPath, { recursive: true });
-    console.log('✅ Carpeta Sessions/Subs creada automáticamente, pariente.');
-}
+
+
 
 // --- CHEQUEO DE HERRAMIENTAS ---
 const { exec } = require('child_process');
@@ -1239,41 +1234,7 @@ break;
 
 /////////
 
-case 'code': case 'serbot': {
-    const { startSubBot } = require('./subbot.js'); 
 
-    // 1. Buscamos quién mandó el mensaje de forma ultra-precisa
-    // m.key.participant es el que escribe en grupos, m.key.remoteJid en privado
-    let who = m.key.participant || m.key.remoteJid || m.sender || '';
-    
-    // 2. Limpieza extrema: Si el ID tiene un "@g.us", es un grupo, lo ignoramos
-    // Queremos lo que está antes del @ y que sea puro número
-    let phone = who.split('@')[0].replace(/[^0-9]/g, '');
-
-    // 🚩 VALIDACIÓN DE SEGURIDAD
-    // Si el número es demasiado largo (más de 15 dígitos), es un ID de grupo, no un teléfono
-    if (!phone || phone.length > 15 || phone.length < 8) {
-        return sock.sendMessage(m.key.remoteJid, { 
-            text: "❌ *Error:* No puedo detectar tu número real en este grupo. \n\n👉 *Solución:* Mándame el comando `.code` por **MENSAJE PRIVADO** (chat a solas)." 
-        }, { quoted: m });
-    }
-
-    const chatId = m.key.remoteJid;
-
-    try {
-        await sock.sendMessage(chatId, { 
-            text: `⏳ *@${phone}*, generando código para tu número real...`,
-            mentions: [who]
-        }, { quoted: m });
-
-        // Mandamos el phone REAL al subbot
-        await startSubBot(m, sock, phone); 
-        
-    } catch (e) {
-        console.error("Error en comando .code:", e);
-    }
-}
-break;
 /////////
 
 case 'nsfwmenu': {
