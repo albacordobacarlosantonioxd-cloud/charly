@@ -1710,15 +1710,145 @@ case 'antilink':
             break;
 
             // --- ECONOMÍA ---
-            case 'work':
-                const gana = Math.floor(Math.random() * 500);
-                db.users[sender].money += gana;
-                saveDB();
-                await sock.sendMessage(from, { text: `🛠️ Ganaste $${gana}` });
-                break;
-            case 'profile':
-                await sock.sendMessage(from, { text: `💰 Carteras: $${db.users[sender].money}` });
-                break;
+            case 'w': case 'work': case 'chambear': case 'chamba': case 'trabajar': {
+    const user = db.users[sender];
+    const cooldown = 3 * 60 * 1000; // 3 minutos de espera
+    
+    // Revisar si el usuario está en tiempo de espera
+    if (user.lastwork && Date.now() < user.lastwork) {
+        const tiempoRestante = formatTime(user.lastwork - Date.now());
+        return await sock.sendMessage(from, { 
+            text: `ꕥ Debes esperar *${tiempoRestante}* para volver a chambear, pariente.` 
+        }, { quoted: m });
+    }
+
+    // Definir la ganancia aleatoria (entre 2000 y 4000 como pediste)
+    const rsl = Math.floor(Math.random() * (4000 - 2000 + 1)) + 2000;
+    
+    // Actualizar datos del usuario
+    user.money = (user.money || 0) + rsl;
+    user.lastwork = Date.now() + cooldown;
+    
+    // Guardar cambios en la DB
+    saveDB();
+
+    // Elegir un trabajo aleatorio de la lista
+    const mensajeTrabajo = pickRandom(trabajosLista);
+
+    await sock.sendMessage(from, { 
+        text: `❀ ${mensajeTrabajo} *+$${rsl.toLocaleString()}* pesos.` 
+    }, { quoted: m });
+}
+break;
+
+case 'profile': case 'perfil': {
+    const user = db.users[sender];
+    const name = user.name || 'Usuario';
+    const birth = user.birth || 'Sin especificar';
+    const genero = user.genre || 'Oculto';
+    const comandos = user.usedcommands || 0;
+    const exp = user.exp || 0;
+    const nivel = user.level || 0;
+    const dinero = user.money || 0;
+    const pasatiempo = user.pasatiempo || 'No definido';
+    const desc = user.description ? `\n${user.description}` : '';
+    
+    // Lógica de pareja [cite: 42, 43]
+    const parejaId = user.marry;
+    const pareja = parejaId ? (db.users[parejaId]?.name || 'Alguien') : 'Nadie';
+    const estadoCivil = genero === 'Mujer' ? 'Casada con' : genero === 'Hombre' ? 'Casado con' : 'Casadx con';
+
+    // Rango y Progreso (Cálculo simplificado para tu bot) [cite: 13, 14]
+    const { xp, progresoActual, porcentaje } = calcularProgreso(nivel, exp);
+
+    const profileText = `「✿」 *Perfil* ◢ ${name} ◤${desc}
+
+♛ Cumpleaños › *${birth}*
+⸙ Pasatiempo › *${pasatiempo}*
+⚥ Género › *${genero}*
+♡ ${estadoCivil} › *${pareja}*
+
+✿ Nivel › *${nivel}*
+❀ Experiencia › *${exp.toLocaleString()}*
+➨ Progreso › *${progresoActual} => ${xp}* _(${porcentaje}%)_
+
+💰 Dinero › *$${dinero.toLocaleString()}*
+❒ Comandos usados › *${comandos.toLocaleString()}*`;
+
+    // Intentar sacar la foto de perfil, si no, una por defecto [cite: 49]
+    let pp = 'https://cdn.yuki-wabot.my.id/files/2PVh.jpeg';
+    try { pp = await sock.profilePictureUrl(sender, 'image'); } catch {}
+
+    await sock.sendMessage(from, { image: { url: pp }, caption: profileText }, { quoted: m });
+}
+break;
+
+// --- SETTERS (Para poner datos) ---
+case 'setdesc': case 'setdescription': {
+    if (!text) return m.reply(`《✧》 Uso: .setdesc [tu descripción]`);
+    db.users[sender].description = text;
+    m.reply(`✎ Descripción actualizada.`);
+}
+break;
+
+case 'setgenre': {
+    const genres = ['Hombre', 'Mujer', 'Femboy', 'Transgénero', 'Gay', 'Lesbiana', 'No Binario'];
+    if (!text) return m.reply(`《✧》 Elige un género:\n${genres.map((g, i) => `${i+1}. ${g}`).join('\n')}`);
+    db.users[sender].genre = genres[parseInt(text)-1] || text;
+    m.reply(`✎ Género establecido como: ${db.users[sender].genre}`);
+}
+break;
+
+case 'sethobby': case 'setpasatiempo': {
+    if (!text) return m.reply(`《✧》 Escribe tu pasatiempo favorito (ej: .sethobby Jugar Videojuegos)`);
+    db.users[sender].pasatiempo = text;
+    m.reply(`✎ Pasatiempo guardado.`);
+}
+break;
+
+// --- DEL (Para borrar datos) [cite: 8, 9, 10, 11] ---
+case 'deldesc': db.users[sender].description = ''; m.reply('✎ Descripción eliminada.'); break;
+case 'delgenre': db.users[sender].genre = ''; m.reply('✎ Género eliminado.'); break;
+case 'delhobby': db.users[sender].pasatiempo = ''; m.reply('✎ Pasatiempo eliminado.'); break;
+
+// --- AFK [cite: 1, 6] ---
+case 'afk': {
+    db.users[sender].afk = Date.now();
+    db.users[sender].afkReason = text || 'Sin especificar';
+    m.reply(`ꕥ Estarás AFK.\n> ○ Motivo » *${db.users[sender].afkReason}*`);
+}
+break;
+
+
+case 'menuperfil': case 'profilemenu': {
+    const menu = `*✩ MENÚ DE PERFIL Y RPG ✩*
+
+*〔 Perfil 〕*
+» .profile (Ver tu tarjeta)
+» .afk [motivo] (Modo inactivo)
+
+*〔 Personalizar 〕*
+» .setdesc [texto]
+» .setgenre [opción]
+» .sethobby [texto]
+» .setbirth [dd/mm/aaaa]
+
+*〔 Borrar 〕*
+» .deldesc | .delgenre | .delhobby
+
+*〔 Relaciones 〕*
+» .marry @usuario (Casarse)
+» .divorce (Divorciarse)
+
+*〔 Rankings 〕*
+» .leaderboard | .lb (Top XP)`;
+    await sock.sendMessage(from, { text: menu }, { quoted: m });
+}
+break;
+
+
+
+
             case 'rob':
                 const v = m.message.extendedTextMessage?.contextInfo?.participant;
                 if (!v) return;
@@ -1768,21 +1898,223 @@ case 'antilink':
                 await sock.sendMessage(from, { sticker: stickerBuffer }, { quoted: m });
             }
             break;
-            case 'p': {
-                const inicio = Date.now();
-                await sock.sendMessage(from, { text: '⭐ Pong...' }, { quoted: m });
-                const fin = Date.now();
-                const latencia = fin - inicio;
 
-                await sock.sendMessage(from, { 
-                    text: ` ✰Pong: ${latencia}ms` 
-                }, { quoted: m });
-            }
-            break;
+////////
+
+case 'daily': case 'diario': {
+    // Accedemos a tu base de datos global
+    const user = db.users[sender];
+
+    // Variables de tiempo
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000; 
+    const maxStreak = 200;
+
+    // Aseguramos que las variables existan en tu objeto de usuario
+    if (user.streak === undefined) user.streak = 0;
+    if (user.lastDailyGlobal === undefined) user.lastDailyGlobal = 0;
+    if (user.money === undefined) user.money = 0;
+
+    // 1. Verificamos el Cooldown (24 horas)
+    // Comparamos el tiempo actual con la última vez que reclamó + 24 horas
+    if (user.lastDailyGlobal !== 0 && now < (user.lastDailyGlobal + oneDay)) {
+        const tiempoRestante = (user.lastDailyGlobal + oneDay) - now;
+        const restante = formatRemainingTime(tiempoRestante);
+        
+        return await sock.sendMessage(from, { 
+            text: `⚠️ *¡Ya cobraste hoy, pariente!* \n\nVuelve en: *${restante}* para tu siguiente recompensa.` 
+        }, { quoted: m });
+    }
+
+    // 2. Sistema de Racha (Streak)
+    // Si pasaron más de 36 horas (1.5 días), el usuario fue flojo y perdió la racha
+    const lost = user.streak >= 1 && (now - user.lastDailyGlobal) > (oneDay * 1.5);
+    if (lost) {
+        user.streak = 0;
+    }
+
+    // Aumentamos la racha (máximo 200 días)
+    user.streak = Math.min(user.streak + 1, maxStreak);
+    
+    // 3. Cálculo de la lana ($)
+    // Base de $20,000 + $5,000 por cada día de racha (Tope: $1,015,000)
+    const recompensa = Math.min(20000 + (user.streak - 1) * 5000, 1015000);
+    
+    // ACTUALIZAMOS TU DATABASE.JS
+    user.money += recompensa; // Suma al dinero que ya tiene
+    user.lastDailyGlobal = now; // Guarda la hora actual como última vez reclamada
+    
+    // Guardamos los cambios en el archivo físico
+    saveDB(); 
+
+    // 4. Mensaje final
+    const siguiente = Math.min(20000 + user.streak * 5000, 1015000).toLocaleString();
+    
+    let texto = `「 🎁 *RECOMPENSA DIARIA* 🎁 」\n\n`;
+    texto += `*+ $${recompensa.toLocaleString()}* agregados a tu cuenta.\n`;
+    texto += `🔥 *Racha actual:* ${user.streak} día(s)\n`;
+    texto += `💰 *Próximo Daily:* +$${siguiente}\n\n`;
+    
+    if (lost) {
+        texto += `> ❗ *Perdiste tu racha anterior por no venir ayer.*`;
+    } else {
+        texto += `> ¡Sigue así para ganar más mañana!`;
+    }
+
+    await sock.sendMessage(from, { text: texto }, { quoted: m });
+}
+break;
+
+////////
+            case 'p': case 'ping': {
+    const start = Date.now();
+    
+    // Calculamos la latencia restando el tiempo de inicio al tiempo actual
+    const latency = Date.now() - start;
+
+    // Mandamos solo el mensaje final de la latencia
+    await sock.sendMessage(from, { 
+        text: `✿ *Pong!*\n> Tiempo ⴵ ${latency}ms` 
+    }, { quoted: m });
+}
+break;
             case 'reload': process.exit(); break;
 }
 
  });
 } // <--- ESTA ES LA LLAVE QUE TE FALTABA PARA CERRAR startBot
+
+// Función para elegir un trabajo al azar
+function pickRandom(list) {
+    return list[Math.floor(list.length * Math.random())];
+}
+
+// Función para formatear el tiempo de espera
+function formatTime(ms) {
+    const totalSec = Math.ceil(ms / 1000);
+    const minutes = Math.floor(totalSec / 60);
+    const seconds = totalSec % 60;
+    const parts = [];
+    if (minutes > 0) parts.push(`${minutes} minuto${minutes !== 1 ? 's' : ''}`);
+    if (seconds > 0 || parts.length === 0) parts.push(`${seconds} segundo${seconds !== 1 ? 's' : ''}`);
+    return parts.join(' y ');
+}
+
+// Lista de trabajos
+const trabajosLista = [
+  "Trabajas como recolector de fresas y ganas",
+  "Eres asistente en un taller de cerámica y obtienes",
+  "Diseñas páginas web y ganas",
+  "Eres fotógrafo de bodas y recibes",
+  "Trabajas en una tienda de mascotas y ganas",
+  "Eres narrador de audiolibros y obtienes",
+  "Demuestras en el departamento de arte y ganas",
+  "Trabajas como jardinero en un parque y recibes",
+  "Eres un DJ en fiestas y ganas",
+  "Hiciste un mural en una cafetería y te dieron",
+  "Trabajas como diseñador de interiores y ganas",
+  "Eres un conductor de autobús turístico y obtienes",
+  "Preparas sushi en un restaurante y ganas",
+  "Trabajas como asistente de investigación y recibes",
+  "Eres especialista en marketing de contenidos y ganas",
+  "Trabajas en una granja orgánica y obtienes",
+  "Eres un bailarín en un espectáculo y ganas",
+  "Organizas ferias de arte y recibes",
+  "Eres un escritor freelance y ganas",
+  "Hiciste un diseño gráfico para una campaña y te pagaron",
+  "Trabajas como mecánico de automóviles y ganas",
+  "Eres un instructor de surf y recibes",
+  "Limpias casas como servicio de limpieza y ganas",
+  "Eres un técnico de sonido en conciertos y obtienes",
+  "Trabajas como desarrollador de aplicaciones y ganas",
+  "Eres un croupier en un casino y recibes",
+  "Trabajas como estilista de cabello y ganas",
+  "Eres un restaurador de arte y obtienes",
+  "Trabajas en una librería y ganas",
+  "Eres un guía de montañismo y recibes",
+  "Llevas un blog de viajes y ganas",
+  "Hiciste una campaña de crowdfunding y obtuviste",
+  "Trabajas como asistente social y ganas",
+  "Eres un conductor de camión de carga y recibes",
+  "Trabajas en un equipo de rescate y ganas",
+  "Eres un consultor de negocios y obtienes",
+  "Realizas catas de vino y ganas",
+  "Trabajas como barista en una cafetería y recibes",
+  "Eres un entrenador de mascotas y ganas",
+  "Hiciste un documental para una ONG y recibiste",
+  "Eres un operador de drones y ganas",
+  "Trabajas en una productora de cine y obtienes",
+  "Eres un investigador de mercados y ganas",
+  "Trabajas como repartidor de comida y recibes",
+  "Eres un acupunturista y ganas",
+  "Hiciste un diseño de joyas y obtuviste",
+  "Trabajas como especialista en atención al cliente y ganas",
+  "Eres un conservador de museos y recibes",
+  "Trabajas en un centro de rehabilitación y obtienes",
+  "Eres un piloto de helicóptero y ganas",
+  "Hiciste una campaña de concienciación y te dieron",
+  "Trabajas en un taller de mecánica y ganas",
+  "Eres un organizador de eventos deportivos y recibes",
+  "Desarrollas una aplicación educativa y ganas",
+  "Eres un técnico en redes informáticas y obtienes",
+  "Trabajas como asistente de producción en teatro y ganas",
+  "Eres un ilustrador de libros para niños y recibes",
+  "Trabajas en un centro de yoga y obtienes",
+  "Eres un chef personal y ganas",
+  "Realizas un calendario de fotos y recibiste",
+  "Eres un promotor de salud y bienestar y ganas",
+  "Trabajas como decorador de interiores y recibes",
+  "Eres un arreglista floral y ganas",
+  "Organizas un festival de música y obtienes",
+  "Eres un periodista de investigación y ganas",
+  "Trabajas como asistente técnico en un estudio de grabación y recibes",
+  "Eres un mecánico de bicicletas y ganas",
+  "Hiciste un video viral y obtuviste",
+  "Trabajas como investigador de ciencias sociales y ganas",
+  "Eres un organizador de conferencias y recibes",
+  "Dibujas caricaturas en eventos y ganas",
+  "Eres un responsable de relaciones públicas y obtienes",
+  "Trabajas como coach de vida y ganas",
+  "Eres un educador en un centro cultural y recibes",
+  "Eres un director de fotografía y ganas",
+  "Trabajas en un refugio de animales y obtienes",
+  "Eres un guía en almuerzos y cenas temáticas y ganas",
+  "Hiciste un proyecto de arte comunitario y recibiste",
+  "Eres un traductor de documentos y obtienes",
+  "Trabajas como asistente personal de un ejecutivo y ganas",
+  "Eres un especialista en sostenibilidad y recibes",
+  "Realizas un programa de radio y ganas",
+  "Trabajas como tasador de arte y obtienes",
+  "Eres un creador de contenido en redes sociales y ganas",
+  "Hiciste un workshop de manualidades y recibiste"
+];
+
+////////
+
+function formatRemainingTime(ms) {
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const seg = s % 60;
+    const partes = [];
+    if (h > 0) partes.push(`${h} ${h === 1 ? 'hora' : 'horas'}`);
+    if (m > 0) partes.push(`${m} ${m === 1 ? 'minuto' : 'minutos'}`);
+    if (seg > 0 || partes.length === 0) partes.push(`${seg} ${seg === 1 ? 'segundo' : 'segundos'}`);
+    return partes.join(' y ');
+}
+
+////////
+
+function calcularProgreso(level, exp) {
+    const growth = Math.pow(Math.PI / Math.E, 1.618) * Math.E * 0.75;
+    const min = level === 0 ? 0 : Math.round(Math.pow(level, growth) * 2) + 1;
+    const max = Math.round(Math.pow(level + 1, growth) * 2);
+    const xpNecesaria = max - min;
+    const progresoActual = exp - min;
+    const porcentaje = Math.floor((progresoActual / xpNecesaria) * 100);
+    return { xp: xpNecesaria, progresoActual, porcentaje };
+}
+
+///////
 
 startBot()
