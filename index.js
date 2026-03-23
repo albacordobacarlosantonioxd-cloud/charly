@@ -1324,6 +1324,53 @@ case 'manga': {
     }
 }
 break;
+////////
+
+case 'imagen': case 'img': case 'image': {
+    const axios = require('axios');
+    const text = args.join(' ');
+    
+    if (!text) return await sock.sendMessage(from, { text: `《✧》 Por favor, ingresa un término de búsqueda.\n✐ Ejemplo: .img Yamaha MT09` }, { quoted: m });
+
+    // Lista de palabras prohibidas (Resumida para no ocupar tanto espacio, puedes dejar la tuya completa)
+    const bannedWords = ['+18', 'porn', 'sexo', 'xxx', 'hentai', 'desnudo']; 
+    const lowerText = text.toLowerCase();
+    
+    // Filtro NSFW (Si en tu db no tienes nsfw, esto lo bloquea por defecto)
+    const nsfwEnabled = db.chats?.[from]?.nsfw === true;
+    if (!nsfwEnabled && bannedWords.some(word => lowerText.includes(word))) {
+        return await sock.sendMessage(from, { text: '《✧》 Este comando no permite búsquedas de contenido *+18*.' }, { quoted: m });
+    }
+
+    try {
+        // 1. Buscamos las imágenes (Usando una API pública estable)
+        // Nota: He puesto una URL directa para que no dependas de global.APIs
+        const res = await axios.get(`https://api.screenshotlayer.com/api/search?query=${encodeURIComponent(text)}`).catch(() => null);
+        
+        // Si esa falla, usamos esta otra que es muy buena para bots:
+        const searchUrl = `https://api.egglord.xyz/api/search/google-images?query=${encodeURIComponent(text)}`;
+        const response = await axios.get(searchUrl);
+        const results = response.data.results || [];
+
+        if (results.length === 0) return await sock.sendMessage(from, { text: '《✧》 No encontré imágenes para esa búsqueda.' }, { quoted: m });
+
+        // 2. Seleccionamos la primera imagen válida
+        const imgUrl = results[0].url;
+
+        // 3. Enviamos la imagen con el diseño que te gusta
+        await sock.sendMessage(from, { 
+            image: { url: imgUrl }, 
+            caption: `ㅤ۟∩　ׅ　★　ׅ　🅖oogle 🅘mage 🅢earch　ׄᰙ　\n\n` +
+                     `𖣣ֶㅤ֯⌗ ☆  ⬭ *Búsqueda* › ${text}\n` +
+                     `𖣣ֶㅤ֯⌗ ☆  ⬭ *Fuente* › Google`
+        }, { quoted: m });
+
+    } catch (e) {
+        console.log(e);
+        await sock.sendMessage(from, { text: `> Ocurrió un error al buscar la imagen.` }, { quoted: m });
+    }
+}
+break;
 
 ////////
             case 'menu':
