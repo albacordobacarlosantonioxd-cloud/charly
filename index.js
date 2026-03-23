@@ -1784,25 +1784,40 @@ case 'profile': case 'perfil': {
 break;
 
 // --- SETTERS (Para poner datos) ---
-case 'setdesc': case 'setdescription': {
-    if (!text) return m.reply(`《✧》 Uso: .setdesc [tu descripción]`);
-    db.users[sender].description = text;
-    m.reply(`✎ Descripción actualizada.`);
-}
-break;
-
+// --- CONFIGURAR GÉNERO ---
 case 'setgenre': {
-    const genres = ['Hombre', 'Mujer', 'Femboy', 'Transgénero', 'Gay', 'Lesbiana', 'No Binario'];
-    if (!text) return m.reply(`《✧》 Elige un género:\n${genres.map((g, i) => `${i+1}. ${g}`).join('\n')}`);
-    db.users[sender].genre = genres[parseInt(text)-1] || text;
-    m.reply(`✎ Género establecido como: ${db.users[sender].genre}`);
+    const genresList = ['Hombre', 'Mujer', 'Femboy', 'Transgénero', 'Gay', 'Lesbiana', 'No Binario']; // [cite: 57]
+    if (!text) return await sock.sendMessage(from, { text: `《✧》 Elige un género:\n${genresList.map((g, i) => `${i+1}. ${g}`).join('\n')}` }, { quoted: m });
+
+    const choice = parseInt(text) - 1;
+    const generoSelec = genresList[choice] || text;
+    
+    db.users[sender].genre = generoSelec; // [cite: 58, 59]
+    saveDB(); // Guardamos en tu database.js
+
+    await sock.sendMessage(from, { text: `✎ Género establecido como: *${generoSelec}*` }, { quoted: m });
 }
 break;
 
+// --- CONFIGURAR DESCRIPCIÓN ---
+case 'setdesc': case 'setdescription': {
+    if (!text) return await sock.sendMessage(from, { text: `《✧》 Debes especificar una descripción.\n✐ Ejemplo: .setdesc Hola, soy fan de Nanatsu!` }, { quoted: m });
+    
+    db.users[sender].description = text; // [cite: 56]
+    saveDB();
+
+    await sock.sendMessage(from, { text: `✎ Se ha establecido tu descripción correctamente.` }, { quoted: m });
+}
+break;
+
+// --- CONFIGURAR PASATIEMPO ---
 case 'sethobby': case 'setpasatiempo': {
-    if (!text) return m.reply(`《✧》 Escribe tu pasatiempo favorito (ej: .sethobby Jugar Videojuegos)`);
-    db.users[sender].pasatiempo = text;
-    m.reply(`✎ Pasatiempo guardado.`);
+    if (!text) return await sock.sendMessage(from, { text: `《✧》 Escribe tu pasatiempo favorito.` }, { quoted: m });
+    
+    db.users[sender].pasatiempo = text; // [cite: 65]
+    saveDB();
+
+    await sock.sendMessage(from, { text: `✐ Se ha establecido tu pasatiempo: *${text}*` }, { quoted: m });
 }
 break;
 
