@@ -48,6 +48,15 @@ const DB_PATH = './database.json';
 const mongoose = require('mongoose');
 const mongoURI = 'mongodb+srv://adminbot:adminbot@cluster0.q2q0czd.mongodb.net/BotDatabase?retryWrites=true&w=majority';
 
+
+// Pon esto arriba de todo, cerca de los 'require'
+global.db = {
+    users: {},
+    groups: {}, // <--- Agregamos esto para que la línea 180 no falle
+    chats: {},
+    settings: {}
+};
+
 // Conectamos a la base de datos
 mongoose.connect(mongoURI)
   .then(() => console.log("✅ ¡MongoDB Conectado! Los datos ahora son eternos."))
@@ -73,6 +82,7 @@ async function saveDB(sender) {
         console.error("Error al guardar en la nube:", e);
     }
 }
+
 
 // ✅ FUNCIÓN GLOBAL EXPANDURL
 async function expandUrl(url) {
@@ -166,9 +176,9 @@ const args = body.trim().split(/ +/).slice(1);
 const text = args.join(" ");
 const pushname = m.pushName || 'Usuario'; // Esto extrae el nombre de quien escribe
 
-        // Inicializar Base de Datos
-        if (!db.users[sender]) db.users[sender] = { money: 100 };
-        if (isGroup && !db.groups[from]) db.groups[from] = { antilink: false };
+// 179: Inicializar Base de Datos en Memoria
+if (!global.db.users[sender]) global.db.users[sender] = { money: 100, usedcommands: 0 };
+if (isGroup && !global.db.groups[from]) global.db.groups[from] = { antilink: false };
 
         // Admin Check
         let isAdmin = false;
