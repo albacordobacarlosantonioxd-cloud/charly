@@ -69,22 +69,33 @@ const userSchema = new mongoose.Schema({
 });
 
 const User = mongoose.model('User', userSchema);
+// Forzamos a que se borre el índice 'id' que MongoDB creó por error antes
+User.collection.dropIndex('id_1')
+    .then(() => console.log("🧹 Índice 'id_1' eliminado. Ya no habrá errores de duplicado."))
+    .catch(() => {}); // Si no existe, no pasa nada
 
 async function saveDB(sender) {
     try {
-        // Buscamos al usuario. Si no existe, lo crea con 100 de money.
-        // Si ya existe, solo le suma 1 al contador de comandos.
         await User.findOneAndUpdate(
             { jid: sender }, 
             { 
                 $inc: { usedcommands: 1 },
-                $setOnInsert: { money: 100 } // Esto solo se aplica si el usuario es NUEVO
+                $setOnInsert: { money: 100 } 
             }, 
-            { upsert: true, new: true }
+            { 
+                upsert: true, 
+                returnDocument: 'after', // Esto quita el Warning de "deprecated"
+                setDefaultsOnInsert: true 
+            }
         );
-        console.log(`[DB] Datos sincronizados para: ${sender}`);
     } catch (e) {
-        console.error("❌ Error al guardar en MongoDB:", e);
+        // Si sale el error 11000, intentamos borrar el índice que estorba
+        if (e.code === 11000) {
+            console.log("⚠️ Detectado índice basura. Limpiando...");
+            User.collection.dropIndex('id_1').catch(() => {});
+        } else {
+            console.error("❌ Error en MongoDB:", e);
+        }
     }
 }
 
