@@ -48,40 +48,31 @@ const DB_PATH = './database.json';
 const mongoose = require('mongoose');
 const mongoURI = 'mongodb+srv://adminbot:adminbot@cluster0.q2q0czd.mongodb.net/BotDatabase?retryWrites=true&w=majority';
 
+// Conectamos a la base de datos
 mongoose.connect(mongoURI)
-    .then(() => console.log('✅ ¡MongoDB Conectado! Los datos ahora son eternos.'))
-    .catch(err => console.error('❌ Error fatal en MongoDB:', err));
+  .then(() => console.log("✅ ¡MongoDB Conectado! Los datos ahora son eternos."))
+  .catch(err => console.error("❌ Error al conectar a MongoDB:", err));
 
-// --- 2. EL "MOLDE" DE TUS DATOS (Esquema) ---
-const UserSchema = new mongoose.Schema({
-    id: { type: String, unique: true },
-    money: { type: Number, default: 0 },
-    marry: { type: String, default: '' },
-    level: { type: Number, default: 1 }
-}, { strict: false });
+// Creamos la "maqueta" (Schema) de cómo se guarda el usuario
+const userSchema = new mongoose.Schema({
+    jid: String,
+    usedcommands: { type: Number, default: 0 }
+});
 
-const User = mongoose.model('User', UserSchema);
+const User = mongoose.model('User', userSchema);
 
-// --- 3. NUEVAS FUNCIONES DE BASE DE DATOS ---
-global.db = { users: {}, groups: {} }; // Mantenemos la estructura para tus comandos
-
-const loadDB = async () => {
+async function saveDB(sender) {
     try {
-        const usersFromMongo = await User.find({}); 
-        
-        if (usersFromMongo.length === 0) {
-            console.log('⚠️ MongoDB está vacío o no hay usuarios registrados.');
-        } else {
-            global.db.users = {}; // Limpiamos la RAM
-            usersFromMongo.forEach(u => {
-                global.db.users[u.id] = u._doc; // Pasamos los datos
-            });
-            console.log(`✅ ¡ÉXITO! Se sincronizaron ${usersFromMongo.length} usuarios desde la nube.`);
-        }
+        // Buscamos al usuario y le sumamos 1 al contador
+        await User.findOneAndUpdate(
+            { jid: sender }, 
+            { $inc: { usedcommands: 1 } }, 
+            { upsert: true }
+        );
     } catch (e) {
-        console.error('❌ ERROR CRÍTICO al cargar de MongoDB:', e);
+        console.error("Error al guardar en la nube:", e);
     }
-};
+}
 
 // ✅ FUNCIÓN GLOBAL EXPANDURL
 async function expandUrl(url) {
