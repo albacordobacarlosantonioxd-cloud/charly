@@ -67,34 +67,21 @@ global.db = { users: {}, groups: {} }; // Mantenemos la estructura para tus coma
 
 const loadDB = async () => {
     try {
-        const users = await User.find({});
-        users.forEach(u => {
-            global.db.users[u.id] = u._doc;
-        });
-        console.log(`📦 Sincronizados ${users.length} usuarios desde la nube.`);
-    } catch (e) {
-        console.error('❌ Error al cargar datos de la nube:', e);
-    }
-};
-
-// Esta es la función que salvará a tus usuarios de reinicios
-const saveDB = async (userId) => {
-    if (global.db.users[userId]) {
-        try {
-            await User.findOneAndUpdate(
-                { id: userId }, 
-                global.db.users[userId], 
-                { upsert: true, new: true }
-            );
-        } catch (e) {
-            console.error('❌ No se pudo respaldar en la nube:', e);
+        const usersFromMongo = await User.find({}); 
+        
+        if (usersFromMongo.length === 0) {
+            console.log('⚠️ MongoDB está vacío o no hay usuarios registrados.');
+        } else {
+            global.db.users = {}; // Limpiamos la RAM
+            usersFromMongo.forEach(u => {
+                global.db.users[u.id] = u._doc; // Pasamos los datos
+            });
+            console.log(`✅ ¡ÉXITO! Se sincronizaron ${usersFromMongo.length} usuarios desde la nube.`);
         }
+    } catch (e) {
+        console.error('❌ ERROR CRÍTICO al cargar de MongoDB:', e);
     }
 };
-
-// --- 4. INICIALIZACIÓN ---
-loadDB(); // Cargamos al prender el bot
-if (!global.proposals) global.proposals = {}; // Tu sistema de propuestas sigue igual
 
 // ✅ FUNCIÓN GLOBAL EXPANDURL
 async function expandUrl(url) {
