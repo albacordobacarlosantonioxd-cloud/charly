@@ -2053,6 +2053,33 @@ case 'sethobby': case 'setpasatiempo': {
 }
 break;
 
+case 'setbirth': case 'setcumple': {
+    // 1. Verificamos que el usuario haya escrito algo
+    if (!text) return await sock.sendMessage(from, { 
+        text: `《✧》 Escribe tu fecha de nacimiento.\n\n✐ *Ejemplo:* .setbirth 15 de Octubre` 
+    }, { quoted: m });
+
+    // 2. Aseguramos que el usuario exista en la memoria local
+    if (!db.users[sender]) db.users[sender] = { id: sender };
+    
+    // 3. Guardamos la fecha en el objeto local
+    db.users[sender].birth = text;
+
+    // 4. ¡A LA NUBE! Guardamos en MongoDB
+    try {
+        await saveDB(sender);
+        
+        await sock.sendMessage(from, { 
+            text: `🎂 ¡Listo! Tu fecha de nacimiento se ha guardado como: *${text}*\n\n> Ahora aparecerá en tu .perfil para siempre.` 
+        }, { quoted: m });
+        
+    } catch (e) {
+        console.error("Error al guardar el cumple en Mongo:", e);
+        await sock.sendMessage(from, { text: '❌ Hubo un error al conectar con la base de datos.' }, { quoted: m });
+    }
+}
+break;
+
 // --- DEL (Borrar datos con guardado en nube) ---
 case 'deldesc': 
     db.users[sender].description = ''; 
