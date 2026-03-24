@@ -44,51 +44,53 @@ const SYLPHY_KEY = "sylphy-ty5xtWm";
 const STELLAR_KEY = "api-qG4nw";
 const DB_PATH = './database.json';
 
-// Función para cargar DB con seguridad
 const mongoose = require('mongoose');
 const mongoURI = 'mongodb+srv://adminbot:adminbot@cluster0.q2q0czd.mongodb.net/BotDatabase?retryWrites=true&w=majority';
 
+// 1. UN SOLO SCHEMA PARA TODO (Dinero, Comandos e Historial)
+const userSchema = new mongoose.Schema({
+    jid: { type: String, required: true, unique: true }, // Usamos jid para ser consistentes
+    name: { type: String, default: 'Usuario' },
+    usedcommands: { type: Number, default: 0 },
+    money: { type: Number, default: 100 },
+    history: { type: Array, default: [] } // <-- Aquí guardaremos los chats de la IA
+});
 
-// Pon esto arriba de todo, cerca de los 'require'
+// Evitamos el error de re-declaración
+const User = mongoose.models.User || mongoose.model('User', userSchema);
+
+// 2. Objeto global
 global.db = {
     users: {},
-    groups: {}, // <--- Agregamos esto para que la línea 180 no falle
+    groups: {}, 
     chats: {},
     settings: {}
 };
 global.proposals = {};
-// Conectamos a la base de datos
+
+// 3. Conexión a la base de datos
 mongoose.connect(mongoURI)
   .then(() => console.log("✅ ¡MongoDB Conectado! Los datos ahora son eternos."))
   .catch(err => console.error("❌ Error al conectar a MongoDB:", err));
 
-// Creamos la "maqueta" (Schema) de cómo se guarda el usuario
-const userSchema = new mongoose.Schema({
-    jid: String,
-    usedcommands: { type: Number, default: 0 }
-});
-
-const User = mongoose.model('User', userSchema);
-
-
+// 4. Función saveDB corregida
 async function saveDB(sender) {
     try {
         await User.findOneAndUpdate(
             { jid: sender }, 
             { 
                 $inc: { usedcommands: 1 },
-                $setOnInsert: { money: 100 } 
+                $setOnInsert: { money: 100, history: [] } 
             }, 
             { 
                 upsert: true, 
-                returnDocument: 'after', // Esto quita el Warning de "deprecated"
+                returnDocument: 'after',
                 setDefaultsOnInsert: true 
             }
         );
     } catch (e) {
-        // Si sale el error 11000, intentamos borrar el índice que estorba
         if (e.code === 11000) {
-            console.log("⚠️ Detectado índice basura. Limpiando...");
+            console.log("⚠️ Limpiando índices antiguos...");
             User.collection.dropIndex('id_1').catch(() => {});
         } else {
             console.error("❌ Error en MongoDB:", e);
@@ -1518,6 +1520,73 @@ break;
     }
 }
 break;
+//////
+
+case 'ia': case 'llama': case 'chatgpt': {
+    if (!text) return sock.sendMessage(from, { text: '¿Qué pasó, pariente? Dime qué quieres preguntarme.' }, { quoted: m });
+
+    try {
+        const Groq = require("groq-sdk");
+        const groq = new Groq({ apiKey: "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" }); // Usa la nueva que generaste
+
+        // 1. Buscamos al usuario en la DB usando el modelo User que creamos
+        let user = await User.findOne({ jid: sender });
+        
+        // Si no existe, lo creamos de una vez
+        if (!user) {
+            user = await User.create({ jid: sender, name: m.pushName || 'Usuario', history: [] });
+        }
+
+        // 2. Preparamos los mensajes (System + Historial + Pregunta Actual)
+        let messages = [
+            { 
+                role: "system", 
+                content: `Eres un bot de WhatsApp divertido y servicial. Hablas como un compa de México (usa jerga como "qué onda", "pariente", "arre"). Eres experto en programación, el juego Free Fire y motos Yamaha MT-09. El usuario con el que hablas se llama ${m.pushName || 'pariente'}.` 
+            }
+        ];
+
+        // Añadimos el historial que ya teníamos guardado
+        if (user.history && user.history.length > 0) {
+            user.history.forEach(msg => messages.push(msg));
+        }
+
+        // Añadimos la pregunta que acaba de hacer el usuario
+        messages.push({ role: "user", content: text });
+
+        // 3. Llamada a la API de Groq (Llama 3.3 70B)
+        const chatCompletion = await groq.chat.completions.create({
+            messages: messages,
+            model: "llama-3.3-70b-versatile",
+            temperature: 0.7,
+            max_tokens: 1024,
+            stream: false
+        });
+
+        const respuestaIA = chatCompletion.choices[0]?.message?.content || "No supe qué decirte, compa.";
+
+        // 4. Actualizamos la memoria en la DB
+        // Guardamos este par de mensajes (pregunta y respuesta)
+        user.history.push({ role: "user", content: text });
+        user.history.push({ role: "assistant", content: respuestaIA });
+
+        // Si el historial es muy largo (más de 10 mensajes), borramos los más viejos
+        // Esto ayuda a tus 4GB de RAM y a no gastar tokens de más
+        while (user.history.length > 10) {
+            user.history.shift();
+        }
+
+        // Guardamos los cambios en MongoDB Atlas
+        await user.save();
+
+        // 5. Enviamos la respuesta a WhatsApp
+        await sock.sendMessage(from, { text: respuestaIA }, { quoted: m });
+
+    } catch (err) {
+        console.error("Error en el comando IA:", err);
+        await sock.sendMessage(from, { text: '❌ Valio barriga, la IA se trabó. Intenta de nuevo en un rato.' }, { quoted: m });
+    }
+}
+break;
 
 ////////
             case 'menu':
@@ -1526,8 +1595,13 @@ break;
 │ 🧠 *IA & VOZ*
 │ ❯ .ai
 │ ❯ .v
-│ ❯ .cop / .copilot
-│ ❯ .letra / .lyrics
+│ ❯ .cop 
+│ ❯ .copilot
+│ ❯ .letra 
+│ ❯ .lyrics
+│ ❯ .gemini
+│ ❯ .ia
+│ ❯ llama
 │
 │ 📥 *DESCARGAS*
 │ ❯ .audio 
@@ -1543,7 +1617,7 @@ break;
 │ ❯ .slap 
 │ ❯ .hug
 │ ❯ .kill
-│ ❯ .fuck
+│ ❯ .nsfwmenu
 │ ❯ .translate 
 │ ❯ .brat
 │
@@ -1560,6 +1634,7 @@ break;
 │
 │ 💰 *ECONOMÍA*
 │ ❯ .profile 
+│ ❯ .menuperfil
 │ ❯ .work 
 │ ❯ .rob
 │
