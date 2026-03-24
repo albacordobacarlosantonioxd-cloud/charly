@@ -45,23 +45,56 @@ const STELLAR_KEY = "api-qG4nw";
 const DB_PATH = './database.json';
 
 // Función para cargar DB con seguridad
-const loadDB = () => {
-    if (!fs.existsSync(DB_PATH)) {
-        fs.writeFileSync(DB_PATH, JSON.stringify({ users: {}, groups: {} }));
-    }
+const mongoose = require('mongoose');
+const mongoURI = 'mongodb+srv://adminbot:<db_password>@cluster0.q2q0czd.mongodb.net/?appName=Cluster0'; 
+
+mongoose.connect(mongoURI)
+    .then(() => console.log('✅ ¡MongoDB Conectado! Los datos ahora son eternos.'))
+    .catch(err => console.error('❌ Error fatal en MongoDB:', err));
+
+// --- 2. EL "MOLDE" DE TUS DATOS (Esquema) ---
+const UserSchema = new mongoose.Schema({
+    id: { type: String, unique: true },
+    money: { type: Number, default: 0 },
+    marry: { type: String, default: '' },
+    level: { type: Number, default: 1 }
+}, { strict: false });
+
+const User = mongoose.model('User', UserSchema);
+
+// --- 3. NUEVAS FUNCIONES DE BASE DE DATOS ---
+global.db = { users: {}, groups: {} }; // Mantenemos la estructura para tus comandos
+
+const loadDB = async () => {
     try {
-        let data = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
-        if (!data.users) data.users = {};
-        if (!data.groups) data.groups = {};
-        return data;
+        const users = await User.find({});
+        users.forEach(u => {
+            global.db.users[u.id] = u._doc;
+        });
+        console.log(`📦 Sincronizados ${users.length} usuarios desde la nube.`);
     } catch (e) {
-        return { users: {}, groups: {} };
+        console.error('❌ Error al cargar datos de la nube:', e);
     }
 };
 
-let db = loadDB();
-const saveDB = () => fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-if (!global.proposals) global.proposals = {};
+// Esta es la función que salvará a tus usuarios de reinicios
+const saveDB = async (userId) => {
+    if (global.db.users[userId]) {
+        try {
+            await User.findOneAndUpdate(
+                { id: userId }, 
+                global.db.users[userId], 
+                { upsert: true, new: true }
+            );
+        } catch (e) {
+            console.error('❌ No se pudo respaldar en la nube:', e);
+        }
+    }
+};
+
+// --- 4. INICIALIZACIÓN ---
+loadDB(); // Cargamos al prender el bot
+if (!global.proposals) global.proposals = {}; // Tu sistema de propuestas sigue igual
 
 // ✅ FUNCIÓN GLOBAL EXPANDURL
 async function expandUrl(url) {
@@ -1869,126 +1902,184 @@ case 'antilink':
             break;
 
             // --- ECONOMÍA ---
-            case 'w': case 'work': case 'chambear': case 'chamba': case 'trabajar': {
+case 'w': case 'work': case 'chambear': case 'chamba': case 'trabajar': {
+    // 1. Aseguramos que el usuario exista en la memoria local
+    if (!db.users[sender]) db.users[sender] = { id: sender, money: 0, lastwork: 0 };
     const user = db.users[sender];
-    const cooldown = 3 * 60 * 1000; // 3 minutos de espera
     
-    // Revisar si el usuario está en tiempo de espera
-    if (user.lastwork && Date.now() < user.lastwork) {
-        const tiempoRestante = formatTime(user.lastwork - Date.now());
+    const cooldown = 3 * 60 * 1000; // 3 minutos de espera
+    const now = Date.now();
+    
+    // 2. Revisar si el usuario está en tiempo de espera (Cooldown)
+    if (user.lastwork && now < user.lastwork) {
+        const tiempoRestanteMs = user.lastwork - now;
+        const tiempoRestante = formatTime(tiempoRestanteMs); // Asegúrate de tener tu función formatTime
+        
         return await sock.sendMessage(from, { 
-            text: `ꕥ Debes esperar *${tiempoRestante}* para volver a chambear, pariente.` 
+            text: `⚠️ *¡Tranquilo, pariente!* \n\nDebes esperar *${tiempoRestante}* para volver a la chamba.` 
         }, { quoted: m });
     }
 
-    // Definir la ganancia aleatoria (entre 2000 y 4000 como pediste)
+    // 3. Definir la ganancia aleatoria (entre $2000 y $4000)
     const rsl = Math.floor(Math.random() * (4000 - 2000 + 1)) + 2000;
     
-    // Actualizar datos del usuario
+    // 4. Actualizar datos en el objeto local
     user.money = (user.money || 0) + rsl;
-    user.lastwork = Date.now() + cooldown;
+    user.lastwork = now + cooldown;
     
-    // Guardar cambios en la DB
-    saveDB();
+    // 5. ¡LO MÁS IMPORTANTE! Guardar en la nube de MongoDB
+    try {
+        await saveDB(sender); 
+    } catch (e) {
+        console.error("Error al guardar la chamba en Mongo:", e);
+    }
 
-    // Elegir un trabajo aleatorio de la lista
+    // 6. Elegir un trabajo aleatorio de la lista
+    // Asegúrate de tener definida 'trabajosLista' arriba de tus cases
     const mensajeTrabajo = pickRandom(trabajosLista);
 
     await sock.sendMessage(from, { 
-        text: `❀ ${mensajeTrabajo} *+$${rsl.toLocaleString()}* pesos.` 
+        text: `👷 *${mensajeTrabajo}*\n💰 Ganaste: *+$${rsl.toLocaleString()}* pesos.\n\n> _Tus ahorros están seguros en la nube._` 
     }, { quoted: m });
 }
 break;
 
 case 'profile': case 'perfil': {
+    // 1. Aseguramos que el usuario exista en la memoria
+    if (!db.users[sender]) db.users[sender] = { id: sender };
     const user = db.users[sender];
-    const name = user.name || 'Usuario';
+
+    // 2. Extraemos los datos (si no existen, ponemos valores por defecto)
+    const name = m.pushName || user.name || 'Usuario';
     const birth = user.birth || 'Sin especificar';
     const genero = user.genre || 'Oculto';
-    const comandos = user.usedcommands || 0;
+    
+    // Si quieres que el contador de comandos funcione, hay que sumarle uno aquí
+    user.usedcommands = (user.usedcommands || 0) + 1;
+    await saveDB(sender); // Guardamos este pequeño cambio en la nube
+
     const exp = user.exp || 0;
-    const nivel = user.level || 0;
+    const nivel = user.level || 1;
     const dinero = user.money || 0;
     const pasatiempo = user.pasatiempo || 'No definido';
-    const desc = user.description ? `\n${user.description}` : '';
+    const desc = user.description ? `\n> _${user.description}_` : '';
     
-    // Lógica de pareja [cite: 42, 43]
+    // 3. Lógica de pareja (Buscamos el nombre del esposo/a en la DB)
     const parejaId = user.marry;
-    const pareja = parejaId ? (db.users[parejaId]?.name || 'Alguien') : 'Nadie';
+    let parejaNombre = 'Nadie';
+    if (parejaId) {
+        // Intentamos sacar el nombre si el bot lo tiene registrado, si no, el número
+        parejaNombre = db.users[parejaId]?.name || `@${parejaId.split('@')[0]}`;
+    }
+    
     const estadoCivil = genero === 'Mujer' ? 'Casada con' : genero === 'Hombre' ? 'Casado con' : 'Casadx con';
 
-    // Rango y Progreso (Cálculo simplificado para tu bot) [cite: 13, 14]
+    // 4. Rango y Progreso
+    // Nota: Asegúrate de tener tu función 'calcularProgreso' definida en el index.js
     const { xp, progresoActual, porcentaje } = calcularProgreso(nivel, exp);
 
-    const profileText = `「✿」 *Perfil* ◢ ${name} ◤${desc}
+    const profileText = `「✿」 *PERFIL DE USUARIO* 「✿」
+    
+◢ *${name}* ◤${desc}
 
-♛ Cumpleaños › *${birth}*
-⸙ Pasatiempo › *${pasatiempo}*
-⚥ Género › *${genero}*
-♡ ${estadoCivil} › *${pareja}*
+♛ *Cumpleaños:* ${birth}
+⸙ *Pasatiempo:* ${pasatiempo}
+⚥ *Género:* ${genero}
+♡ *${estadoCivil}:* ${parejaId ? parejaNombre : 'Nadie'}
 
-✿ Nivel › *${nivel}*
-❀ Experiencia › *${exp.toLocaleString()}*
-➨ Progreso › *${progresoActual} => ${xp}* _(${porcentaje}%)_
+📊 *ESTADÍSTICAS*
+✿ *Nivel:* ${nivel}
+❀ *Experiencia:* ${exp.toLocaleString()}
+➨ *Progreso:* ${progresoActual} ➔ ${xp} _(${porcentaje}%)_
 
-💰 Dinero › *$${dinero.toLocaleString()}*
-❒ Comandos usados › *${comandos.toLocaleString()}*`;
+💰 *Cartera:* $${dinero.toLocaleString()}
+❒ *Comandos:* ${user.usedcommands.toLocaleString()}
+☁️ _Datos protegidos en MongoDB Atlas_`;
 
-    // Intentar sacar la foto de perfil, si no, una por defecto [cite: 49]
-    let pp = 'https://cdn.yuki-wabot.my.id/files/2PVh.jpeg';
-    try { pp = await sock.profilePictureUrl(sender, 'image'); } catch {}
+    // 5. Foto de perfil
+    let pp = 'https://cdn.yuki-wabot.my.id/files/2PVh.jpeg'; // Foto por defecto
+    try { 
+        pp = await sock.profilePictureUrl(sender, 'image'); 
+    } catch {
+        // Si no tiene foto o falla, se queda la de por defecto
+    }
 
-    await sock.sendMessage(from, { image: { url: pp }, caption: profileText }, { quoted: m });
+    await sock.sendMessage(from, { 
+        image: { url: pp }, 
+        caption: profileText,
+        mentions: parejaId ? [parejaId] : [] // Mencionamos a la pareja para que el link funcione
+    }, { quoted: m });
 }
 break;
-
 // --- SETTERS (Para poner datos) ---
 // --- CONFIGURAR GÉNERO ---
 case 'setgenre': {
-    const genresList = ['Hombre', 'Mujer', 'Femboy', 'Transgénero', 'Gay', 'Lesbiana', 'No Binario']; // [cite: 57]
+    const genresList = ['Hombre', 'Mujer', 'Femboy', 'Transgénero', 'Gay', 'Lesbiana', 'No Binario']; 
     if (!text) return await sock.sendMessage(from, { text: `《✧》 Elige un género:\n${genresList.map((g, i) => `${i+1}. ${g}`).join('\n')}` }, { quoted: m });
 
     const choice = parseInt(text) - 1;
     const generoSelec = genresList[choice] || text;
     
-    db.users[sender].genre = generoSelec; // [cite: 58, 59]
-    saveDB(); // Guardamos en tu database.js
+    if (!db.users[sender]) db.users[sender] = {};
+    db.users[sender].genre = generoSelec; 
+    
+    await saveDB(sender); // Guarda en MongoDB
 
     await sock.sendMessage(from, { text: `✎ Género establecido como: *${generoSelec}*` }, { quoted: m });
 }
 break;
 
-// --- CONFIGURAR DESCRIPCIÓN ---
 case 'setdesc': case 'setdescription': {
     if (!text) return await sock.sendMessage(from, { text: `《✧》 Debes especificar una descripción.\n✐ Ejemplo: .setdesc Hola, soy fan de Nanatsu!` }, { quoted: m });
     
-    db.users[sender].description = text; // [cite: 56]
-    saveDB();
+    if (!db.users[sender]) db.users[sender] = {};
+    db.users[sender].description = text; 
+    
+    await saveDB(sender);
 
     await sock.sendMessage(from, { text: `✎ Se ha establecido tu descripción correctamente.` }, { quoted: m });
 }
 break;
 
-// --- CONFIGURAR PASATIEMPO ---
 case 'sethobby': case 'setpasatiempo': {
     if (!text) return await sock.sendMessage(from, { text: `《✧》 Escribe tu pasatiempo favorito.` }, { quoted: m });
     
-    db.users[sender].pasatiempo = text; // [cite: 65]
-    saveDB();
+    if (!db.users[sender]) db.users[sender] = {};
+    db.users[sender].pasatiempo = text; 
+    
+    await saveDB(sender);
 
     await sock.sendMessage(from, { text: `✐ Se ha establecido tu pasatiempo: *${text}*` }, { quoted: m });
 }
 break;
 
-// --- DEL (Para borrar datos) [cite: 8, 9, 10, 11] ---
-case 'deldesc': db.users[sender].description = ''; m.reply('✎ Descripción eliminada.'); break;
-case 'delgenre': db.users[sender].genre = ''; m.reply('✎ Género eliminado.'); break;
-case 'delhobby': db.users[sender].pasatiempo = ''; m.reply('✎ Pasatiempo eliminado.'); break;
+// --- DEL (Borrar datos con guardado en nube) ---
+case 'deldesc': 
+    db.users[sender].description = ''; 
+    await saveDB(sender); 
+    m.reply('✎ Descripción eliminada.'); 
+break;
 
-// --- AFK [cite: 1, 6] ---
+case 'delgenre': 
+    db.users[sender].genre = ''; 
+    await saveDB(sender); 
+    m.reply('✎ Género eliminado.'); 
+break;
+
+case 'delhobby': 
+    db.users[sender].pasatiempo = ''; 
+    await saveDB(sender); 
+    m.reply('✎ Pasatiempo eliminado.'); 
+break;
+
+// --- AFK (Estado ausente) ---
 case 'afk': {
+    if (!db.users[sender]) db.users[sender] = {};
     db.users[sender].afk = Date.now();
     db.users[sender].afkReason = text || 'Sin especificar';
+    
+    await saveDB(sender); // Muy importante para que no se quite el AFK si el bot se reinicia
+    
     m.reply(`ꕥ Estarás AFK.\n> ○ Motivo » *${db.users[sender].afkReason}*`);
 }
 break;
@@ -2076,21 +2167,17 @@ break;
 ////////
 
 case 'daily': case 'diario': {
-    // Accedemos a tu base de datos global
+    if (!db.users[sender]) db.users[sender] = {};
     const user = db.users[sender];
 
-    // Variables de tiempo
     const now = Date.now();
     const oneDay = 24 * 60 * 60 * 1000; 
     const maxStreak = 200;
 
-    // Aseguramos que las variables existan en tu objeto de usuario
     if (user.streak === undefined) user.streak = 0;
     if (user.lastDailyGlobal === undefined) user.lastDailyGlobal = 0;
     if (user.money === undefined) user.money = 0;
 
-    // 1. Verificamos el Cooldown (24 horas)
-    // Comparamos el tiempo actual con la última vez que reclamó + 24 horas
     if (user.lastDailyGlobal !== 0 && now < (user.lastDailyGlobal + oneDay)) {
         const tiempoRestante = (user.lastDailyGlobal + oneDay) - now;
         const restante = formatRemainingTime(tiempoRestante);
@@ -2100,63 +2187,44 @@ case 'daily': case 'diario': {
         }, { quoted: m });
     }
 
-    // 2. Sistema de Racha (Streak)
-    // Si pasaron más de 36 horas (1.5 días), el usuario fue flojo y perdió la racha
     const lost = user.streak >= 1 && (now - user.lastDailyGlobal) > (oneDay * 1.5);
-    if (lost) {
-        user.streak = 0;
-    }
+    if (lost) user.streak = 0;
 
-    // Aumentamos la racha (máximo 200 días)
     user.streak = Math.min(user.streak + 1, maxStreak);
-    
-    // 3. Cálculo de la lana ($)
-    // Base de $20,000 + $5,000 por cada día de racha (Tope: $1,015,000)
     const recompensa = Math.min(20000 + (user.streak - 1) * 5000, 1015000);
     
-    // ACTUALIZAMOS TU DATABASE.JS
-    user.money += recompensa; // Suma al dinero que ya tiene
-    user.lastDailyGlobal = now; // Guarda la hora actual como última vez reclamada
+    user.money += recompensa; 
+    user.lastDailyGlobal = now; 
     
-    // Guardamos los cambios en el archivo físico
-    saveDB(); 
+    // GUARDADO EN MONGODB
+    await saveDB(sender); 
 
-    // 4. Mensaje final
     const siguiente = Math.min(20000 + user.streak * 5000, 1015000).toLocaleString();
-    
     let texto = `「 🎁 *RECOMPENSA DIARIA* 🎁 」\n\n`;
     texto += `*+ $${recompensa.toLocaleString()}* agregados a tu cuenta.\n`;
     texto += `🔥 *Racha actual:* ${user.streak} día(s)\n`;
     texto += `💰 *Próximo Daily:* +$${siguiente}\n\n`;
     
-    if (lost) {
-        texto += `> ❗ *Perdiste tu racha anterior por no venir ayer.*`;
-    } else {
-        texto += `> ¡Sigue así para ganar más mañana!`;
-    }
+    texto += lost ? `> ❗ *Perdiste tu racha anterior por no venir ayer.*` : `> ¡Sigue así para ganar más mañana!`;
 
     await sock.sendMessage(from, { text: texto }, { quoted: m });
 }
 break;
-/////////////
+
 
 case 'marry': case 'casarse': {
     const proposer = sender; 
-    // Captura mención de mensaje normal o de un mensaje respondido
     const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || m.message?.extendedTextMessage?.contextInfo?.participant;
     
     if (!mentioned) return await sock.sendMessage(from, { text: '《✧》 Menciona al usuario al que deseas proponer matrimonio.' }, { quoted: m });
     if (proposer === mentioned) return await sock.sendMessage(from, { text: '《✧》 No puedes proponerte matrimonio a ti mismo.' }, { quoted: m });
     
-    // ESTOS IF SON LOS IMPORTANTES: Si el usuario no existe en la DB, lo crean vacío para que no dé error
     if (!db.users[proposer]) db.users[proposer] = {};
     if (!db.users[mentioned]) db.users[mentioned] = {};
 
-    // Revisar si ya están casados en tu database.json
     if (db.users[proposer].marry) return await sock.sendMessage(from, { text: `《✧》 Ya estás casado, pariente.` }, { quoted: m });
     if (db.users[mentioned].marry) return await sock.sendMessage(from, { text: `《✧》 Esa persona ya está casada.` }, { quoted: m });
 
-    // Guardar propuesta en la RAM (global.proposals)
     global.proposals[mentioned] = proposer;
 
     await sock.sendMessage(from, { 
@@ -2164,10 +2232,7 @@ case 'marry': case 'casarse': {
         mentions: [proposer, mentioned]
     }, { quoted: m });
 
-    // Temporizador para borrar la propuesta si no aceptan
-    setTimeout(() => { 
-        if (global.proposals[mentioned]) delete global.proposals[mentioned]; 
-    }, 120000);
+    setTimeout(() => { if (global.proposals[mentioned]) delete global.proposals[mentioned]; }, 120000);
 }
 break;
 
@@ -2177,14 +2242,15 @@ case 'acept': case 'aceptar': {
 
     if (!proposer) return await sock.sendMessage(from, { text: '《✧》 No tienes propuestas de matrimonio pendientes.' }, { quoted: m });
 
-    // Aseguramos que existan en la DB antes de guardar el casorio
     if (!db.users[proposer]) db.users[proposer] = {};
     if (!db.users[proposee]) db.users[proposee] = {};
 
-    // Guardamos el matrimonio permanentemente
     db.users[proposer].marry = proposee;
     db.users[proposee].marry = proposer;
-    saveDB(); // <--- Esto lo guarda en tu database.json
+
+    // GUARDADO EN MONGODB (Ambos usuarios)
+    await saveDB(proposer); 
+    await saveDB(proposee); 
 
     delete global.proposals[proposee]; 
 
@@ -2194,30 +2260,58 @@ case 'acept': case 'aceptar': {
     }, { quoted: m });
 }
 break;
-///////////////
 
 case 'divorce': case 'divorciarse': {
+    if (!db.users[sender]) db.users[sender] = {};
     const user = db.users[sender];
     const parejaId = user.marry;
 
-    // 1. Verificamos si de verdad está casado
-    if (!parejaId) {
-        return await sock.sendMessage(from, { 
-            text: '《✧》 Pero si estás más solo que la una, pariente. No tienes de quién divorciarte.' 
-        }, { quoted: m });
-    }
+    if (!parejaId) return await sock.sendMessage(from, { text: '《✧》 No tienes de quién divorciarte.' }, { quoted: m });
 
-    // 2. Borramos el vínculo en ambos usuarios
     const exPareja = db.users[parejaId];
+    user.marry = ""; 
+    if (exPareja) exPareja.marry = ""; 
     
-    user.marry = ""; // Limpiamos tu perfil
-    if (exPareja) exPareja.marry = ""; // Limpiamos el de tu ex
-    
-    saveDB(); // Guardamos los cambios en el JSON
+    // GUARDADO EN MONGODB (Ambos usuarios)
+    await saveDB(sender); 
+    if (parejaId) await saveDB(parejaId); 
 
-    await sock.sendMessage(from, { 
-        text: `💔 Te has divorciado legalmente. Ahora vuelves a estar soltero/a.` 
-    }, { quoted: m });
+    await sock.sendMessage(from, { text: `💔 Te has divorciado legalmente.` }, { quoted: m });
+}
+break;
+
+
+case 'acept': case 'aceptar': {
+    const proposee = sender; // El que está aceptando (tú)
+    const proposer = global.proposals[proposee]; // El que mandó la propuesta
+
+    if (!proposer) return await sock.sendMessage(from, { text: '《✧》 No tienes propuestas de matrimonio pendientes o ya expiró.' }, { quoted: m });
+
+    // 1. Aseguramos que ambos existan en el objeto local db
+    if (!db.users[proposer]) db.users[proposer] = { id: proposer, money: 0, marry: '', level: 1 };
+    if (!db.users[proposee]) db.users[proposee] = { id: proposee, money: 0, marry: '', level: 1 };
+
+    // 2. Guardamos el vínculo en la RAM (db)
+    db.users[proposer].marry = proposee;
+    db.users[proposee].marry = proposer;
+
+    // 3. ¡ESTO ES LO NUEVO! Guardamos a ambos en MongoDB Atlas
+    try {
+        await saveDB(proposer); 
+        await saveDB(proposee); 
+        
+        // Borramos la propuesta de la memoria temporal
+        delete global.proposals[proposee]; 
+
+        await sock.sendMessage(from, { 
+            text: `✎ ¡Felicidades! @${proposer.split('@')[0]} y @${proposee.split('@')[0]} ahora están casados legalmente. ✨\n\n> Los datos han sido respaldados en la nube.`,
+            mentions: [proposer, proposee]
+        }, { quoted: m });
+
+    } catch (e) {
+        console.error("Error al casar en Mongo:", e);
+        await sock.sendMessage(from, { text: '❌ Hubo un error al guardar el matrimonio en la base de datos.' }, { quoted: m });
+    }
 }
 break;
 
