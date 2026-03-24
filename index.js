@@ -1430,7 +1430,7 @@ case 'hd': case 'remini': case 'enhance': {
 break;
 ///////////
 
-case 'ia': case 'imagine': case 'generar': {
+ case 'imagine': case 'generar': {
     const axios = require('axios');
     const prompt = args.join(' ');
 
