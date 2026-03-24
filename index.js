@@ -56,7 +56,7 @@ global.db = {
     chats: {},
     settings: {}
 };
-
+global.proposals = {};
 // Conectamos a la base de datos
 mongoose.connect(mongoURI)
   .then(() => console.log("✅ ¡MongoDB Conectado! Los datos ahora son eternos."))
@@ -69,10 +69,7 @@ const userSchema = new mongoose.Schema({
 });
 
 const User = mongoose.model('User', userSchema);
-// Forzamos a que se borre el índice 'id' que MongoDB creó por error antes
-User.collection.dropIndex('id_1')
-    .then(() => console.log("🧹 Índice 'id_1' eliminado. Ya no habrá errores de duplicado."))
-    .catch(() => {}); // Si no existe, no pasa nada
+
 
 async function saveDB(sender) {
     try {
@@ -1855,19 +1852,35 @@ case 'kick':
             }
 
 break;
-            case 'del': case 'delete': {
-            if (!m.message.extendedTextMessage?.contextInfo?.stanzaId) return sock.sendMessage(from, { text: '❌ Responde al mensaje que quieres borrar.' });
+case 'del': case 'delete': {
+    // 1. Verificaciones de seguridad (Grupo y Admins)
+    const groupMetadata = isGroup ? await sock.groupMetadata(from) : null;
+    const participants = isGroup ? groupMetadata.participants : [];
+    const groupAdmins = participants.filter(v => v.admin !== null).map(v => v.id);
+    
+    // ¿Es admin el que escribe? ¿Es el dueño del bot?
+    const isAdmin = groupAdmins.includes(sender);
+    const isBotAdmin = groupAdmins.includes(sock.user.id.split(':')[0] + '@s.whatsapp.net');
+    const isOwner = ['82906290606190@s.whatsapp.net'].includes(sender); // Cambia TU_NUMERO
 
-            const key = {
-                remoteJid: from,
-                fromMe: m.message.extendedTextMessage.contextInfo.participant === sock.user.id.split(':')[0] + '@s.whatsapp.net',
-                id: m.message.extendedTextMessage.contextInfo.stanzaId,
-                participant: m.message.extendedTextMessage.contextInfo.participant
-            };
+    if (!isGroup) return sock.sendMessage(from, { text: '❌ Este comando solo funciona en grupos.' });
+    if (!isAdmin && !isOwner) return sock.sendMessage(from, { text: '❌ Solo los administradores pueden usar este comando.' });
+    if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ Necesito ser administrador para borrar mensajes de otros.' });
 
-            await sock.sendMessage(from, { delete: key });
-        }
-        break;
+    // 2. Lógica de borrado
+    const quoted = m.message.extendedTextMessage?.contextInfo;
+    if (!quoted?.stanzaId) return sock.sendMessage(from, { text: '❌ Responde al mensaje que quieres borrar.' });
+
+    const key = {
+        remoteJid: from,
+        fromMe: quoted.participant === sock.user.id.split(':')[0] + '@s.whatsapp.net',
+        id: quoted.stanzaId,
+        participant: quoted.participant
+    };
+
+    await sock.sendMessage(from, { delete: key });
+}
+break;
 case 'promote': case 'demote': {
                 if (!isGroup || !isAdmin) return;
                 let user = m.message.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || m.message.extendedTextMessage?.contextInfo?.participant;
@@ -2119,27 +2132,27 @@ break;
 
 
 case 'menuperfil': case 'profilemenu': {
-    const menu = `*✩ MENÚ DE PERFIL Y RPG ✩*
+    const menu = `╔════════════════════╗
+║    ✨  *MENÚ DE USUARIO* ✨    ║
+╚════════════════════╝
 
-*〔 Perfil 〕*
-» .profile (Ver tu tarjeta)
-» .afk [motivo] (Modo inactivo)
+  ┌─  *〔 CUENTA 〕*
+  │  • .profile
+  │  • .afk <motivo>
+  └───────────────┈
 
-*〔 Personalizar 〕*
-» .setdesc [texto]
-» .setgenre [opción]
-» .sethobby [texto]
-» .setbirth [dd/mm/aaaa]
+  ┌─  *〔 EDICIÓN 〕*
+  │  • .setdesc  |  .setgenre
+  │  • .sethobby |  .setbirth
+  │  • .deldesc  |  .delhobby
+  └───────────────┈
 
-*〔 Borrar 〕*
-» .deldesc | .delgenre | .delhobby
+  ┌─  *〔 INTERACCIÓN 〕*
+  │  • .marry   💍
+  │  • .divorce 💔
+  │  • .lb      🏆
+  └───────────────┈`;
 
-*〔 Relaciones 〕*
-» .marry @usuario (Casarse)
-» .divorce (Divorciarse)
-
-*〔 Rankings 〕*
-» .leaderboard | .lb (Top XP)`;
     await sock.sendMessage(from, { text: menu }, { quoted: m });
 }
 break;
@@ -2247,52 +2260,38 @@ break;
 
 case 'marry': case 'casarse': {
     const proposer = sender; 
-    const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || m.message?.extendedTextMessage?.contextInfo?.participant;
+    // Capturamos a quién mencionas
+    const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
     
-    if (!mentioned) return await sock.sendMessage(from, { text: '《✧》 Menciona al usuario al que deseas proponer matrimonio.' }, { quoted: m });
-    if (proposer === mentioned) return await sock.sendMessage(from, { text: '《✧》 No puedes proponerte matrimonio a ti mismo.' }, { quoted: m });
+    if (!mentioned) return await sock.sendMessage(from, { text: '《✧》 Menciona a la persona con la que te quieres casar, pariente.' }, { quoted: m });
+    if (proposer === mentioned) return await sock.sendMessage(from, { text: '《✧》 No puedes casarte contigo mismo, no seas gacho.' }, { quoted: m });
     
-    if (!db.users[proposer]) db.users[proposer] = {};
-    if (!db.users[mentioned]) db.users[mentioned] = {};
+    // Verificamos que existan en la base de datos global
+    if (!global.db.users[proposer]) global.db.users[proposer] = { money: 100, usedcommands: 0 };
+    if (!global.db.users[mentioned]) global.db.users[mentioned] = { money: 100, usedcommands: 0 };
 
-    if (db.users[proposer].marry) return await sock.sendMessage(from, { text: `《✧》 Ya estás casado, pariente.` }, { quoted: m });
-    if (db.users[mentioned].marry) return await sock.sendMessage(from, { text: `《✧》 Esa persona ya está casada.` }, { quoted: m });
+    // Revisamos si ya están casados
+    if (global.db.users[proposer].marry) return await sock.sendMessage(from, { text: `《✧》 Ya estás casado, no seas infiel.` }, { quoted: m });
+    if (global.db.users[mentioned].marry) return await sock.sendMessage(from, { text: `《✧》 Esa persona ya tiene dueño(a).` }, { quoted: m });
 
+    // Guardamos la propuesta en el objeto global que definimos arriba
     global.proposals[mentioned] = proposer;
 
     await sock.sendMessage(from, { 
-        text: `✎ @${mentioned.split('@')[0]}, el usuario @${proposer.split('@')[0]} te ha enviado una propuesta de matrimonio.\n\n⚘ *Responde con:*\n> ❀ *.acept* para confirmar.\n> ❀ La propuesta expirará en 2 minutos.`,
+        text: `💍 *PROPUESTA DE MATRIMONIO*\n\n@${proposer.split('@')[0]} le ha pedido matrimonio a @${mentioned.split('@')[0]}.\n\n⚘ *Responde con:*\n> ❀ *.acept* para confirmar.\n> ❀ Tienes 2 minutos antes de que expire.`,
         mentions: [proposer, mentioned]
     }, { quoted: m });
 
-    setTimeout(() => { if (global.proposals[mentioned]) delete global.proposals[mentioned]; }, 120000);
+    // Tiempo de espera de 2 minutos
+    setTimeout(() => { 
+        if (global.proposals[mentioned] === proposer) {
+            delete global.proposals[mentioned]; 
+        }
+    }, 120000);
 }
 break;
 
-case 'acept': case 'aceptar': {
-    const proposee = sender; 
-    const proposer = global.proposals[proposee]; 
 
-    if (!proposer) return await sock.sendMessage(from, { text: '《✧》 No tienes propuestas de matrimonio pendientes.' }, { quoted: m });
-
-    if (!db.users[proposer]) db.users[proposer] = {};
-    if (!db.users[proposee]) db.users[proposee] = {};
-
-    db.users[proposer].marry = proposee;
-    db.users[proposee].marry = proposer;
-
-    // GUARDADO EN MONGODB (Ambos usuarios)
-    await saveDB(proposer); 
-    await saveDB(proposee); 
-
-    delete global.proposals[proposee]; 
-
-    await sock.sendMessage(from, { 
-        text: `✎ ¡Felicidades! @${proposer.split('@')[0]} y @${proposee.split('@')[0]} ahora están casados. ✨`,
-        mentions: [proposer, proposee]
-    }, { quoted: m });
-}
-break;
 
 case 'divorce': case 'divorciarse': {
     if (!db.users[sender]) db.users[sender] = {};
