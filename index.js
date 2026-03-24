@@ -2343,15 +2343,19 @@ case 'acept': case 'aceptar': {
 break;
 
 ////////
-            case 'p': case 'ping': {
-    const start = Date.now();
-    
-    // Calculamos la latencia restando el tiempo de inicio al tiempo actual
-    const latency = Date.now() - start;
+case 'p': case 'ping': {
+    const start = Date.now(); // 1. Arranca el cronómetro
 
-    // Mandamos solo el mensaje final de la latencia
+    // 2. Enviamos el mensaje primero (esto es lo que tarda tiempo)
+    const { key } = await sock.sendMessage(from, { text: '🚀 *Calculando...*' }, { quoted: m });
+
+    const end = Date.now(); // 3. Detiene el cronómetro después de enviar
+    const latency = end - start; // 4. Ahora sí hay una diferencia de tiempo
+
+    // 5. Editamos el mensaje anterior con el resultado real
     await sock.sendMessage(from, { 
-        text: `✿ *Pong!*\n> Tiempo ⴵ ${latency}ms` 
+        text: `✿ *Pong!*\n> Latencia: *${latency}ms`, 
+        edit: key 
     }, { quoted: m });
 }
 break;
