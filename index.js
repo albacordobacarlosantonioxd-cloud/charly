@@ -1859,15 +1859,14 @@ case 'del': case 'delete': {
     const groupAdmins = participants.filter(v => v.admin !== null).map(v => v.id);
     
     // ¿Es admin el que escribe? ¿Es el dueño del bot?
-    const isAdmin = groupAdmins.includes(sender);
+
     const isBotAdmin = groupAdmins.includes(sock.user.id.split(':')[0] + '@s.whatsapp.net');
     const isOwner = ['82906290606190@s.whatsapp.net'].includes(sender); // Cambia TU_NUMERO
-
+ // 2. Verificación: ¿El que lo ejecuta tiene permiso?
     if (!isGroup) return sock.sendMessage(from, { text: '❌ Este comando solo funciona en grupos.' });
-    if (!isAdmin && !isOwner) return sock.sendMessage(from, { text: '❌ Solo los administradores pueden usar este comando.' });
-    if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ Necesito ser administrador para borrar mensajes de otros.' });
+    if (!isAdmin && !isOwner) return sock.sendMessage(from, { text: '❌ Solo los administradores pueden ejecutar este comando.' });
 
-    // 2. Lógica de borrado
+    // 3. Lógica para identificar el mensaje a borrar
     const quoted = m.message.extendedTextMessage?.contextInfo;
     if (!quoted?.stanzaId) return sock.sendMessage(from, { text: '❌ Responde al mensaje que quieres borrar.' });
 
@@ -1878,7 +1877,12 @@ case 'del': case 'delete': {
         participant: quoted.participant
     };
 
-    await sock.sendMessage(from, { delete: key });
+    // 4. Intentar borrar
+    try {
+        await sock.sendMessage(from, { delete: key });
+    } catch (err) {
+        await sock.sendMessage(from, { text: '❌ No pude borrar el mensaje. Asegúrate de que yo (el bot) sea administrador, si no, WhatsApp no me deja.' });
+    }
 }
 break;
 case 'promote': case 'demote': {
