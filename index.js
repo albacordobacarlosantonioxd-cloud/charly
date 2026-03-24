@@ -46,7 +46,7 @@ const DB_PATH = './database.json';
 
 // Función para cargar DB con seguridad
 const mongoose = require('mongoose');
-const mongoURI = 'mongodb+srv://adminbot:<db_password>@cluster0.q2q0czd.mongodb.net/?appName=Cluster0'; 
+const mongoURI = 'mongodb+srv://adminbot:adminbot@cluster0.q2q0czd.mongodb.net/BotDatabase?retryWrites=true&w=majority';
 
 mongoose.connect(mongoURI)
     .then(() => console.log('✅ ¡MongoDB Conectado! Los datos ahora son eternos.'))
