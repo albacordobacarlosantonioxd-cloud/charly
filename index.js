@@ -1377,53 +1377,69 @@ case 'hd': case 'remini': case 'enhance': {
     const axios = require('axios');
     const FormData = require('form-data');
     
-    // 1. Validar que sea una imagen o se responda a una
-    const q = m.quoted || m;
-    const mime = q?.mimetype || q?.msg?.mimetype || '';
+    // --- 1. DETECCIÓN ULTRA-SEGURA DE LA IMAGEN ---
+    // Buscamos el mime type en:
+    // a) El mensaje actual (m.mimetype)
+    // b) Un mensaje citado (m.quoted?.mimetype)
+    // c) Un mensaje de imagen directo (m.msg?.mimetype)
+    const mime = m.mimetype || m.quoted?.mimetype || m.msg?.mimetype || '';
+    
+    // Si no hay mime type de imagen, mandamos el error
+    if (!mime || !/image\/(jpe?g|png|webp)/.test(mime)) {
+        return await sock.sendMessage(from, { 
+            text: `《✧》 Por favor, *responde* a una imagen o *mándala* con el comando *${prefix + command}*.` 
+        }, { quoted: m });
+    }
 
-    if (!mime) return await sock.sendMessage(from, { text: `《✧》 Responde a una *imagen* con el comando *${prefix + command}* para mejorar su calidad.` }, { quoted: m });
-    if (!/image\/(jpe?g|png|webp)/.test(mime)) return await sock.sendMessage(from, { text: `《✧》 El formato *${mime}* no es compatible. Solo imágenes.` }, { quoted: m });
-
-    await sock.sendMessage(from, { text: '`⏳ Mejorando calidad... espera un momento.`' }, { quoted: m });
+    // --- 2. INICIAR PROCESO DE MEJORA ---
+    await sock.sendMessage(from, { text: '`⏳ Mejorando calidad... esto puede tardar unos segundos.`' }, { quoted: m });
 
     try {
-        // 2. Descargar la imagen
+        // 3. Descargar la imagen del mensaje correcto (actual o citado)
+        const q = m.quoted || m;
         const buffer = await q.download();
 
-        // 3. Subir a un hosting temporal (Telegra.ph / Catbox) para obtener una URL
-        const bodyForm = new FormData();
-        bodyForm.append('file', buffer, 'image.jpg');
+        if (!buffer || buffer.length < 10) throw new Error('No se pudo descargar la imagen.');
+
+        // 4. Subir a un hosting temporal (Catbox)
+        // La API de Catbox es muy estable para esto
+        const uploadUrl = 'https://catbox.moe/user/api.php';
         
-        const uploadRes = await axios.post('https://catbox.moe/user/api.php', {
-            reqtype: 'fileupload',
-            fileToUpload: buffer
-        }, {
-            headers: { 'Content-Type': 'multipart/form-data' }
+        // Catbox prefiere que le mandes el buffer directamente en un form
+        const bodyForm = new FormData();
+        bodyForm.append('reqtype', 'fileupload');
+        bodyForm.append('fileToUpload', buffer, { filename: 'image.jpg' });
+        
+        const uploadRes = await axios.post(uploadUrl, bodyForm, {
+            headers: { ...bodyForm.getHeaders() }
         }).catch(() => null);
 
-        // Si Catbox falla, intentamos otra vía o usamos el buffer directo si la API lo permite
-        const imageUrl = typeof uploadRes?.data === 'string' ? uploadRes.data : null;
-        if (!imageUrl) throw new Error('No se pudo generar URL de la imagen.');
+        // Verificamos que Catbox nos devuelva una URL válida (empieza con https://)
+        const imageUrl = typeof uploadRes?.data === 'string' && uploadRes.data.startsWith('https://') ? uploadRes.data : null;
+        
+        if (!imageUrl) throw new Error('No se pudo generar la URL temporal de la imagen.');
 
-        // 4. Llamada a la API de Sylphy
-        // Scale 2 es el estándar, puedes subirlo a 4 si la API lo permite
+        // 5. Llamada a la API de Sylphy (HD)
+        // Scale 2 es el estándar para duplicar la resolución
         const apiKey = 'sylphy-ty5xtWm';
         const apiUrl = `https://sylphy.xyz/tools/upscale?url=${encodeURIComponent(imageUrl)}&scale=2&api_key=${apiKey}`;
         
-        const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+        console.log("Generando HD desde URL:", imageUrl); // Depuración
 
-        if (!response.data) throw new Error('La API no devolvió una imagen.');
+        const response = await axios.get(apiUrl, { responseType: 'arraybuffer', timeout: 60000 }); // 60s timeout
 
-        // 5. Enviar el resultado
+        if (!response.data || response.data.length < 100) throw new Error('La API de HD no devolvió una imagen válida.');
+
+        // 6. Enviar el resultado final
         await sock.sendMessage(from, { 
             image: Buffer.from(response.data), 
             caption: '`✅ ¡Imagen mejorada con éxito!`' 
         }, { quoted: m });
 
     } catch (e) {
-        console.error(e);
+        console.error("Error detallado en HD:", e.message);
         await sock.sendMessage(from, { 
-            text: `> ❌ Error al procesar la imagen.\n> [Detalle: *${e.message}*]` 
+            text: `> ❌ Error: No se pudo procesar la imagen.\n> [Detalle: *${e.message}*]` 
         }, { quoted: m });
     }
 }
@@ -1435,21 +1451,23 @@ break;
     const prompt = args.join(' ');
 
     if (!prompt) return await sock.sendMessage(from, { 
-        text: `《✧》 Por favor, describe la imagen que quieres crear.\n✐ Ejemplo: .ia un astronauta en Marte estilo anime` 
+        text: `《✧》 Describe la imagen que quieres crear.\n✐ Ejemplo: .ia una moto MT09 en el espacio` 
     }, { quoted: m });
 
-    // Mandamos un aviso de que el bot está "pensando"
-    await sock.sendMessage(from, { text: '`⏳ Generando imagen con IA... espera un momento.`' }, { quoted: m });
+    await sock.sendMessage(from, { text: '`⏳ Generando imagen... esto puede tardar unos segundos.`' }, { quoted: m });
 
     try {
-        // Usamos la API que me pasaste
         const response = await axios.get(`https://apis-starlights-team.koyeb.app/starlight/txt-to-image2?text=${encodeURIComponent(prompt)}`);
         
-        // Dependiendo de la API, el resultado puede ser un JSON con un link o la imagen directa
-        // Si la API devuelve un link en res.data.result:
-        const imgUrl = response.data.result || response.data.url;
+        // --- DEPURACIÓN: Esto imprimirá la respuesta real en tu consola ---
+        console.log("Respuesta de la API:", JSON.stringify(response.data, null, 2));
 
-        if (!imgUrl) throw new Error('No se pudo obtener la imagen.');
+        // Buscamos el link en todas las opciones posibles que suelen usar estas APIs
+        const imgUrl = response.data.result || response.data.url || response.data.status || response.data.link;
+
+        if (!imgUrl || typeof imgUrl !== 'string') {
+            throw new Error('La API no devolvió un link válido.');
+        }
 
         await sock.sendMessage(from, { 
             image: { url: imgUrl }, 
@@ -1457,9 +1475,9 @@ break;
         }, { quoted: m });
 
     } catch (e) {
-        console.error(e);
+        console.error("Error detallado:", e.message);
         await sock.sendMessage(from, { 
-            text: `> ❌ Error al generar la imagen. Intenta con un prompt más simple.` 
+            text: `> ❌ Error: No se pudo generar. Intenta con un texto más corto o en inglés.` 
         }, { quoted: m });
     }
 }
