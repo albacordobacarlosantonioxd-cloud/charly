@@ -72,17 +72,21 @@ const User = mongoose.model('User', userSchema);
 
 async function saveDB(sender) {
     try {
-        // Buscamos al usuario y le sumamos 1 al contador
+        // Buscamos al usuario. Si no existe, lo crea con 100 de money.
+        // Si ya existe, solo le suma 1 al contador de comandos.
         await User.findOneAndUpdate(
             { jid: sender }, 
-            { $inc: { usedcommands: 1 } }, 
-            { upsert: true }
+            { 
+                $inc: { usedcommands: 1 },
+                $setOnInsert: { money: 100 } // Esto solo se aplica si el usuario es NUEVO
+            }, 
+            { upsert: true, new: true }
         );
+        console.log(`[DB] Datos sincronizados para: ${sender}`);
     } catch (e) {
-        console.error("Error al guardar en la nube:", e);
+        console.error("❌ Error al guardar en MongoDB:", e);
     }
 }
-
 
 // ✅ FUNCIÓN GLOBAL EXPANDURL
 async function expandUrl(url) {
@@ -176,10 +180,13 @@ const args = body.trim().split(/ +/).slice(1);
 const text = args.join(" ");
 const pushname = m.pushName || 'Usuario'; // Esto extrae el nombre de quien escribe
 
-// 179: Inicializar Base de Datos en Memoria
-if (!global.db.users[sender]) global.db.users[sender] = { money: 100, usedcommands: 0 };
-if (isGroup && !global.db.groups[from]) global.db.groups[from] = { antilink: false };
-
+// Línea 179 aprox:
+if (!global.db.users[sender]) {
+    global.db.users[sender] = { 
+        money: 100, 
+        usedcommands: 0 
+    };
+}
         // Admin Check
         let isAdmin = false;
         if (isGroup) {
