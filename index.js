@@ -1,10 +1,23 @@
 const express = require('express');
 const app = express();
+const cors = require('cors'); // Asegúrate de tenerlo instalado con npm install cors
+app.use(cors());
 const PORT = process.env.PORT || 3000;
 
 // Esto crea una mini página web que Koyeb revisa para saber que el bot está vivo
 app.get('/', (req, res) => {
     res.send('✅ El Bot de Spotify está Activo y Firme, pariente.');
+});
+
+// Esta es la ruta que usará tu index.html mañana
+app.get('/api/stats', async (req, res) => {
+    try {
+        // Buscamos en tu modelo 'User' que ya definiste arriba
+        const usuarios = await User.find().sort({ usedcommands: -1 }).limit(10);
+        res.json(usuarios);
+    } catch (e) {
+        res.status(500).json({ error: "Error al leer la base de datos" });
+    }
 });
 
 app.listen(PORT, () => {
