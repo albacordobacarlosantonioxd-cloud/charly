@@ -56,6 +56,7 @@ app.listen(PORT, () => {
     console.log(`🚀 Servidor Keep-Alive y API corriendo en el puerto ${PORT}`);
 });
 
+let sock; // La declaramos aquí arriba para que todo el archivo la vea
 const { 
     default: makeWASocket, 
     useMultiFileAuthState, 
@@ -158,13 +159,13 @@ async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     const { version } = await fetchLatestBaileysVersion();
 
-    const sock = makeWASocket({
-        version,
-        logger: pino({ level: 'silent' }),
-        auth: state,
-        printQRInTerminal: false,
-        browser: ["Bot Maestro", "Chrome", "1.0.0"]
-    });
+sock = makeWASocket({  // <--- SIN EL 'CONST' AL PRINCIPIO
+    version,
+    logger: pino({ level: 'silent' }),
+    auth: state,
+    printQRInTerminal: false,
+    browser: ["Bot Maestro", "Chrome", "1.0.0"]
+});
 
     sock.ev.on('creds.update', saveCreds);
 
