@@ -1,18 +1,20 @@
 const express = require('express');
 const app = express();
-const cors = require('cors'); // Asegúrate de tenerlo instalado con npm install cors
-app.use(cors());
+const cors = require('cors'); 
 const PORT = process.env.PORT || 3000;
 
-// Esto crea una mini página web que Koyeb revisa para saber que el bot está vivo
+// --- CONFIGURACIÓN NECESARIA ---
+app.use(cors());
+app.use(express.json()); // <--- ¡ESTA LÍNEA ES VITAL PARA EL ANUNCIO!
+
+// 1. Ruta de vida (para UptimeRobot)
 app.get('/', (req, res) => {
     res.send('✅ El Bot de Spotify está Activo y Firme, pariente.');
 });
 
-// Esta es la ruta que usará tu index.html mañana
+// 2. Ruta para ver la tabla de usuarios
 app.get('/api/stats', async (req, res) => {
     try {
-        // Buscamos en tu modelo 'User' que ya definiste arriba
         const usuarios = await User.find().sort({ usedcommands: -1 }).limit(10);
         res.json(usuarios);
     } catch (e) {
@@ -20,8 +22,38 @@ app.get('/api/stats', async (req, res) => {
     }
 });
 
+// 3. LA NUEVA LÓGICA DE ENVÍO (BROADCAST) Y REINICIO
+app.post('/api/comando', async (req, res) => {
+    const { accion, mensaje } = req.body;
+    
+    if (accion === 'reiniciar') {
+        res.json({ mensaje: "Reiniciando sistema en Render..." });
+        setTimeout(() => { process.exit(0); }, 2000);
+    } 
+    
+    else if (accion === 'broadcast') {
+        try {
+            const usuarios = await User.find({}, 'jid');
+            let enviados = 0;
+
+            for (const user of usuarios) {
+                try {
+                    // RECUERDA: Cambia 'sock' por el nombre de tu variable de Baileys
+                    await sock.sendMessage(user.jid, { text: mensaje });
+                    enviados++;
+                    await new Promise(res => setTimeout(res, 1000)); // Pausa anti-ban
+                } catch (err) { console.log("Error en envío individual"); }
+            }
+            res.json({ mensaje: `✅ Anuncio enviado a ${enviados} usuarios.` });
+        } catch (e) {
+            res.status(500).json({ error: "Error en el servidor" });
+        }
+    }
+});
+
+// 4. Encendido
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor Keep-Alive corriendo en el puerto ${PORT}`);
+    console.log(`🚀 Servidor Keep-Alive y API corriendo en el puerto ${PORT}`);
 });
 
 const { 
