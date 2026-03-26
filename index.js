@@ -94,24 +94,24 @@ const mongoose = require('mongoose');
 const mongoURI = 'mongodb+srv://adminbot:adminbot@cluster0.q2q0czd.mongodb.net/BotDatabase?retryWrites=true&w=majority';
 
 // 1. UN SOLO SCHEMA PARA TODO (Dinero, Comandos e Historial)
-const userSchema = new mongoose.Schema({
-    jid: { type: String, required: true, unique: true }, // Usamos jid para ser consistentes
+// --- 1. MODELO ÚNICO DE USUARIO (Fusionado) ---
+const UserSchema = new mongoose.Schema({
+    jid: { type: String, required: true, unique: true },
     name: { type: String, default: 'Usuario' },
     usedcommands: { type: Number, default: 0 },
     money: { type: Number, default: 100 },
-    history: { type: Array, default: [] } // <-- Aquí guardaremos los chats de la IA
+    history: { type: Array, default: [] } 
 });
+// Solo una vez declaramos el modelo User
+const User = mongoose.model('User', UserSchema);
 
-// Evitamos el error de re-declaración
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+// --- 2. MODELO DE GRUPOS (Para el OnlyAdmin) ---
+const GroupSchema = new mongoose.Schema({
+    id: { type: String, unique: true }, 
+    onlyAdmin: { type: Boolean, default: false } 
+});
+const Group = mongoose.model('Group', GroupSchema);
 
-// 2. Objeto global
-global.db = {
-    users: {},
-    groups: {}, 
-    chats: {},
-    settings: {}
-};
 global.proposals = {};
 
 // 3. Conexión a la base de datos
@@ -368,7 +368,22 @@ if (apiAction) {
 
         //////////
 
+// --- FILTRO DE SEGURIDAD POR GRUPO ---
+if (jid.endsWith('@g.us')) {
+    const groupConfig = await Group.findOne({ id: jid });
+    
+    // Si el modo admin está prendido para este grupo...
+    if (groupConfig && groupConfig.onlyAdmin) {
+        const isAdmin = participants.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin'));
+        const isOwner = sender.includes("521xxxxxxxxxx"); // <-- TU NÚMERO OTRA VEZ
 
+        // Si NO es admin ni dueño, ignoramos el comando totalmente
+        if (!isAdmin && !isOwner) {
+            console.log(`🚫 Bloqueado en ${jid} para el usuario: ${sender}`);
+            return; // Mata la ejecución aquí mismo
+        }
+    }
+}
 
 
 ///////////////
@@ -1319,6 +1334,25 @@ break;
 
 /////////
 
+case 'onlyadmin':
+    if (!jid.endsWith('@g.us')) return sock.sendMessage(jid, { text: "❌ Este comando solo sirve en grupos." });
+
+    // Revisa si es Admin o el Dueño (Tú)
+    const isAdmin = participants.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin'));
+    const isOwner = sender.includes("82906290606190"); // <-- ¡PON TU NÚMERO AQUÍ! (Sin el @s.whatsapp.net)
+
+    if (!isAdmin && !isOwner) return sock.sendMessage(jid, { text: "❌ No tienes permisos para usar este comando." });
+
+    if (args[0] === 'on') {
+        await Group.findOneAndUpdate({ id: jid }, { onlyAdmin: true }, { upsert: true });
+        await sock.sendMessage(jid, { text: "🔒 *MODO ADMIN ACTIVADO*\nAhora solo los administradores pueden usar el bot en este grupo." });
+    } else if (args[0] === 'off') {
+        await Group.findOneAndUpdate({ id: jid }, { onlyAdmin: false }, { upsert: true });
+        await sock.sendMessage(jid, { text: "🔓 *MODO ADMIN DESACTIVADO*\nEl bot vuelve a estar disponible para todos." });
+    } else {
+        await sock.sendMessage(jid, { text: "💡 Uso: *.onlyadmin on* o *.onlyadmin off*" });
+    }
+    break;
 
 /////////
 
