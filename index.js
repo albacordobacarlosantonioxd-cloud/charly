@@ -1353,22 +1353,26 @@ break;
 /////////
 
 case 'onlyadmin':
-    if (!jid.endsWith('@g.us')) return sock.sendMessage(jid, { text: "❌ Este comando solo sirve en grupos." });
+    // Cambiamos jid por from
+    if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: "❌ Este comando solo sirve en grupos." });
 
     // Revisa si es Admin o el Dueño (Tú)
+    // Asegúrate de que 'participants' y 'sender' estén definidos arriba en tu código
     const isAdmin = participants.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin'));
-    const isOwner = sender.includes("82906290606190"); // <-- ¡PON TU NÚMERO AQUÍ! (Sin el @s.whatsapp.net)
+    
+    // Ajusté tu número aquí (asegúrate de que sea tu número real de WhatsApp)
+    const isOwner = sender.includes("8296290619"); 
 
-    if (!isAdmin && !isOwner) return sock.sendMessage(jid, { text: "❌ No tienes permisos para usar este comando." });
+    if (!isAdmin && !isOwner) return sock.sendMessage(from, { text: "❌ No tienes permisos para usar este comando." });
 
     if (args[0] === 'on') {
-        await Group.findOneAndUpdate({ id: jid }, { onlyAdmin: true }, { upsert: true });
-        await sock.sendMessage(jid, { text: "🔒 *MODO ADMIN ACTIVADO*\nAhora solo los administradores pueden usar el bot en este grupo." });
+        await Group.findOneAndUpdate({ id: from }, { onlyAdmin: true }, { upsert: true });
+        await sock.sendMessage(from, { text: "🔒 *MODO ADMIN ACTIVADO*\nAhora solo los administradores pueden usar el bot en este grupo." });
     } else if (args[0] === 'off') {
-        await Group.findOneAndUpdate({ id: jid }, { onlyAdmin: false }, { upsert: true });
-        await sock.sendMessage(jid, { text: "🔓 *MODO ADMIN DESACTIVADO*\nEl bot vuelve a estar disponible para todos." });
+        await Group.findOneAndUpdate({ id: from }, { onlyAdmin: false }, { upsert: true });
+        await sock.sendMessage(from, { text: "🔓 *MODO ADMIN DESACTIVADO*\nEl bot vuelve a estar disponible para todos." });
     } else {
-        await sock.sendMessage(jid, { text: "💡 Uso: *.onlyadmin on* o *.onlyadmin off*" });
+        await sock.sendMessage(from, { text: "💡 Uso: *.onlyadmin on* o *.onlyadmin off*" });
     }
     break;
 
