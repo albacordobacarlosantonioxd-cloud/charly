@@ -237,11 +237,19 @@ const text = args.join(" ");
 const pushname = m.pushName || 'Usuario'; // Esto extrae el nombre de quien escribe
 
 // Línea 179 aprox:
-if (!global.db.users[sender]) {
-    global.db.users[sender] = { 
+// --- LÓGICA CON MONGODB (Reemplazo de la 240-245) ---
+let user = await User.findOne({ jid: sender });
+
+if (!user) {
+    // Si no existe en la base de datos, lo creamos
+    user = new User({ 
+        jid: sender, 
+        name: pushName || 'Usuario',
         money: 100, 
         usedcommands: 0 
-    };
+    });
+    await user.save();
+    console.log(`✨ Usuario registrado en MongoDB: ${sender}`);
 }
         // Admin Check
         let isAdmin = false;
@@ -2419,21 +2427,31 @@ break;
 
 case 'marry': case 'casarse': {
     const proposer = sender; 
-    // Capturamos a quién mencionas
     const mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
     
     if (!mentioned) return await sock.sendMessage(from, { text: '《✧》 Menciona a la persona con la que te quieres casar, pariente.' }, { quoted: m });
     if (proposer === mentioned) return await sock.sendMessage(from, { text: '《✧》 No puedes casarte contigo mismo, no seas gacho.' }, { quoted: m });
-    
-    // Verificamos que existan en la base de datos global
-    if (!global.db.users[proposer]) global.db.users[proposer] = { money: 100, usedcommands: 0 };
-    if (!global.db.users[mentioned]) global.db.users[mentioned] = { money: 100, usedcommands: 0 };
 
-    // Revisamos si ya están casados
-    if (global.db.users[proposer].marry) return await sock.sendMessage(from, { text: `《✧》 Ya estás casado, no seas infiel.` }, { quoted: m });
-    if (global.db.users[mentioned].marry) return await sock.sendMessage(from, { text: `《✧》 Esa persona ya tiene dueño(a).` }, { quoted: m });
+    // 1. Buscamos a los dos en MongoDB
+    let userProposer = await User.findOne({ jid: proposer });
+    let userMentioned = await User.findOne({ jid: mentioned });
 
-    // Guardamos la propuesta en el objeto global que definimos arriba
+    // 2. Si no existen, los creamos (Registro automático)
+    if (!userProposer) {
+        userProposer = new User({ jid: proposer, name: 'Usuario', money: 100 });
+        await userProposer.save();
+    }
+    if (!userMentioned) {
+        userMentioned = new User({ jid: mentioned, name: 'Usuario', money: 100 });
+        await userMentioned.save();
+    }
+
+    // 3. Revisamos si ya están casados (Usando los datos de MongoDB)
+    // Nota: Asegúrate de que en tu UserSchema agregaste el campo 'marry'
+    if (userProposer.marry) return await sock.sendMessage(from, { text: `《✧》 Ya estás casado, no seas infiel.` }, { quoted: m });
+    if (userMentioned.marry) return await sock.sendMessage(from, { text: `《✧》 Esa persona ya tiene dueño(a).` }, { quoted: m });
+
+    // 4. Guardamos la propuesta (Esto sí puede ser global porque es temporal)
     global.proposals[mentioned] = proposer;
 
     await sock.sendMessage(from, { 
@@ -2441,7 +2459,6 @@ case 'marry': case 'casarse': {
         mentions: [proposer, mentioned]
     }, { quoted: m });
 
-    // Tiempo de espera de 2 minutos
     setTimeout(() => { 
         if (global.proposals[mentioned] === proposer) {
             delete global.proposals[mentioned]; 
@@ -2473,35 +2490,39 @@ break;
 
 
 case 'acept': case 'aceptar': {
-    const proposee = sender; // El que está aceptando (tú)
+    const proposee = sender; // Tú (el que acepta)
     const proposer = global.proposals[proposee]; // El que mandó la propuesta
 
     if (!proposer) return await sock.sendMessage(from, { text: '《✧》 No tienes propuestas de matrimonio pendientes o ya expiró.' }, { quoted: m });
 
-    // 1. Aseguramos que ambos existan en el objeto local db
-    if (!db.users[proposer]) db.users[proposer] = { id: proposer, money: 0, marry: '', level: 1 };
-    if (!db.users[proposee]) db.users[proposee] = { id: proposee, money: 0, marry: '', level: 1 };
-
-    // 2. Guardamos el vínculo en la RAM (db)
-    db.users[proposer].marry = proposee;
-    db.users[proposee].marry = proposer;
-
-    // 3. ¡ESTO ES LO NUEVO! Guardamos a ambos en MongoDB Atlas
     try {
-        await saveDB(proposer); 
-        await saveDB(proposee); 
+        // 1. Buscamos a ambos en MongoDB
+        let userProposer = await User.findOne({ jid: proposer });
+        let userProposee = await User.findOne({ jid: proposee });
+
+        // 2. Si por algo no existen, los creamos rápido
+        if (!userProposer) userProposer = new User({ jid: proposer, name: 'Usuario' });
+        if (!userProposee) userProposee = new User({ jid: proposee, name: 'Usuario' });
+
+        // 3. Guardamos el vínculo (El ID del uno en el otro)
+        userProposer.marry = proposee;
+        userProposee.marry = proposer;
+
+        // 4. ¡A la nube! Guardamos los cambios
+        await userProposer.save();
+        await userProposee.save();
         
-        // Borramos la propuesta de la memoria temporal
+        // Borramos la propuesta de la memoria temporal (RAM)
         delete global.proposals[proposee]; 
 
         await sock.sendMessage(from, { 
-            text: `✎ ¡Felicidades! @${proposer.split('@')[0]} y @${proposee.split('@')[0]} ahora están casados legalmente. ✨\n\n> Los datos han sido respaldados en la nube.`,
+            text: `💍 ¡Felicidades! @${proposer.split('@')[0]} y @${proposee.split('@')[0]} ahora están casados legalmente. ✨\n\n> El matrimonio ha sido registrado en la base de datos eterna.`,
             mentions: [proposer, proposee]
         }, { quoted: m });
 
     } catch (e) {
         console.error("Error al casar en Mongo:", e);
-        await sock.sendMessage(from, { text: '❌ Hubo un error al guardar el matrimonio en la base de datos.' }, { quoted: m });
+        await sock.sendMessage(from, { text: '❌ Hubo un error al guardar el matrimonio en MongoDB.' }, { quoted: m });
     }
 }
 break;
