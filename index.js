@@ -100,7 +100,8 @@ const UserSchema = new mongoose.Schema({
     name: { type: String, default: 'Usuario' },
     usedcommands: { type: Number, default: 0 },
     money: { type: Number, default: 100 },
-    history: { type: Array, default: [] } 
+    history: { type: Array, default: [] },
+    marry: { type: String, default: null } // <-- SI NO ESTÁ ESTA LÍNEA, NO VA A GUARDAR NADA
 });
 // Solo una vez declaramos el modelo User
 const User = mongoose.model('User', UserSchema);
