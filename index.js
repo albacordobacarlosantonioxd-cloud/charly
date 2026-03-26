@@ -109,8 +109,10 @@ const User = mongoose.model('User', UserSchema);
 // --- 2. MODELO DE GRUPOS (Para el OnlyAdmin) ---
 const GroupSchema = new mongoose.Schema({
     id: { type: String, unique: true }, 
-    onlyAdmin: { type: Boolean, default: false } 
+onlyAdmin: { type: Boolean, default: false }, // Lo que hicimos hace rato
+    antilink: { type: Boolean, default: false } // <-- AGREGA ESTA LÍNEA AHORA
 });
+
 const Group = mongoose.model('Group', GroupSchema);
 
 global.proposals = {};
@@ -260,13 +262,21 @@ if (!user) {
         }
         
         // Lógica para detectar links (Fuera del switch de comandos)
-        if (isGroup && db.groups[from]?.antilink && !isAdmin) {
-            if (body.includes('chat.whatsapp.com/') || body.includes('http')) {
-                await sock.sendMessage(from, { delete: m.key }); // Borra el mensaje
-                await sock.sendMessage(from, { text: '🚫 Links prohibidos aquí, compa.' });
-            }
-        }
+// --- FILTRO ANTILINK CON MONGODB (Reemplazo de la 263) ---
+if (isGroup) {
+    // 1. Buscamos la configuración de este grupo en Mongo
+    const groupConfig = await Group.findOne({ id: from });
 
+    // 2. Si el Antilink está activado y el que escribe NO es admin...
+    if (groupConfig?.antilink && !isAdmin) {
+        // Revisamos si el mensaje tiene un link de WhatsApp
+        if (body.includes('chat.whatsapp.com')) {
+            await sock.sendMessage(from, { delete: m.key }); // Borramos el mensaje
+            await sock.sendMessage(from, { text: `🚫 *ANTILINK ACTIVADO*\n\n@${sender.split('@')[0]}, no se permiten links de otros grupos aquí.`, mentions: [sender] });
+            return; // Aquí paramos para que no ejecute nada más
+        }
+    }
+}
 
 
 
