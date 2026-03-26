@@ -1313,9 +1313,12 @@ break;
 /////////
 
 case 'cum': {
-    // 1. Verificación de SFW
-    if (isGroup && db.groups[from]?.sfw) {
-        return sock.sendMessage(from, { text: '🚫 *Comando Bloqueado:* El modo SFW está activo. ¡Nada de cochinadas aquí!' }, { quoted: m });
+// 1. Verificación de SFW con MongoDB
+    if (isGroup) {
+        const groupConfig = await Group.findOne({ id: from });
+        if (groupConfig && groupConfig.sfw) {
+            return sock.sendMessage(from, { text: '🚫 *Comando Bloqueado:* El modo SFW está activo. ¡Nada de cochinadas aquí!' }, { quoted: m });
+        }
     }
 
     try {
@@ -1352,29 +1355,27 @@ break;
 
 /////////
 
-case 'onlyadmin':
-    // Cambiamos jid por from
-    if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: "❌ Este comando solo sirve en grupos." });
+case 'onlyadmin': {
+            // Verificamos si es grupo
+            if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: "❌ Este comando solo sirve en grupos." });
 
-    // Revisa si es Admin o el Dueño (Tú)
-    // Asegúrate de que 'participants' y 'sender' estén definidos arriba en tu código
-    const isAdmin = participants.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin'));
-    
-    // Ajusté tu número aquí (asegúrate de que sea tu número real de WhatsApp)
-    const isOwner = sender.includes("8296290619"); 
+            // Definimos quién es admin y quién es dueño
+            const isAdmin = participants?.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin'));
+            const isOwner = sender.includes("8296290619"); // Tu número
 
-    if (!isAdmin && !isOwner) return sock.sendMessage(from, { text: "❌ No tienes permisos para usar este comando." });
+            if (!isAdmin && !isOwner) return sock.sendMessage(from, { text: "❌ No tienes permisos para usar este comando." });
 
-    if (args[0] === 'on') {
-        await Group.findOneAndUpdate({ id: from }, { onlyAdmin: true }, { upsert: true });
-        await sock.sendMessage(from, { text: "🔒 *MODO ADMIN ACTIVADO*\nAhora solo los administradores pueden usar el bot en este grupo." });
-    } else if (args[0] === 'off') {
-        await Group.findOneAndUpdate({ id: from }, { onlyAdmin: false }, { upsert: true });
-        await sock.sendMessage(from, { text: "🔓 *MODO ADMIN DESACTIVADO*\nEl bot vuelve a estar disponible para todos." });
-    } else {
-        await sock.sendMessage(from, { text: "💡 Uso: *.onlyadmin on* o *.onlyadmin off*" });
-    }
-    break;
+            if (args[0] === 'on') {
+                await Group.findOneAndUpdate({ id: from }, { onlyAdmin: true }, { upsert: true });
+                await sock.sendMessage(from, { text: "🔒 *MODO ADMIN ACTIVADO*\nAhora solo los administradores pueden usar el bot en este grupo." });
+            } else if (args[0] === 'off') {
+                await Group.findOneAndUpdate({ id: from }, { onlyAdmin: false }, { upsert: true });
+                await sock.sendMessage(from, { text: "🔓 *MODO ADMIN DESACTIVADO*\nEl bot vuelve a estar disponible para todos." });
+            } else {
+                await sock.sendMessage(from, { text: "💡 Uso: *.onlyadmin on* o *.onlyadmin off*" });
+            }
+        }
+        break;
 
 /////////
 
