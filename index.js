@@ -388,19 +388,18 @@ if (apiAction) {
         //////////
 
 // --- FILTRO DE SEGURIDAD POR GRUPO ---
-if (jid.endsWith('@g.us')) {
-    const groupConfig = await Group.findOne({ id: jid });
-    
-    // Si el modo admin está prendido para este grupo...
-    if (groupConfig && groupConfig.onlyAdmin) {
-        const isAdmin = participants.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin'));
-        const isOwner = sender.includes("521xxxxxxxxxx"); // <-- TU NÚMERO OTRA VEZ
+// --- FILTRO DE SEGURIDAD POR GRUPO (Corregido) ---
+const chatId = from || jid || m.key.remoteJid; // Esto asegura que encuentre la ID
 
-        // Si NO es admin ni dueño, ignoramos el comando totalmente
-        if (!isAdmin && !isOwner) {
-            console.log(`🚫 Bloqueado en ${jid} para el usuario: ${sender}`);
-            return; // Mata la ejecución aquí mismo
-        }
+if (chatId && chatId.endsWith('@g.us')) {
+    const groupConfig = await Group.findOne({ id: chatId });
+    
+    if (groupConfig && groupConfig.onlyAdmin) {
+        // Asegúrate de que 'participants' y 'sender' estén definidos arriba
+        const isAdmin = participants?.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin'));
+        const isOwner = sender.includes("82906290606190"); // Tu número
+
+        if (!isAdmin && !isOwner) return; 
     }
 }
 
