@@ -1487,12 +1487,6 @@ case 'images': {
     const bannedWords = ['+18', 'porn', 'sexo', 'xxx', 'hentai', 'desnudo']; 
     const lowerText = text.toLowerCase();
     
-    // Filtro NSFW (Si en tu db no tienes nsfw, esto lo bloquea por defecto)
-    const nsfwEnabled = db.chats?.[from]?.nsfw === true;
-    if (!nsfwEnabled && bannedWords.some(word => lowerText.includes(word))) {
-        return await sock.sendMessage(from, { text: '《✧》 Este comando no permite búsquedas de contenido *+18*.' }, { quoted: m });
-    }
-
     try {
         // 1. Buscamos las imágenes (Usando una API pública estable)
         // Nota: He puesto una URL directa para que no dependas de global.APIs
