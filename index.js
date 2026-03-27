@@ -1477,42 +1477,50 @@ case 'manga': {
 break;
 ////////
 
-case 'images': {
-    const axios = require('axios');
-    const text = args.join(' ');
-    
-    if (!text) return await sock.sendMessage(from, { text: `《✧》 Por favor, ingresa un término de búsqueda.\n✐ Ejemplo: .img Yamaha MT09` }, { quoted: m });
+case 'flux': {
+    if (!text) return sock.sendMessage(from, { text: '¿Qué quieres que cree la IA? Ejemplo: .ia un astronauta en Marte' });
 
-    // Lista de palabras prohibidas (Resumida para no ocupar tanto espacio, puedes dejar la tuya completa)
-    const bannedWords = ['+18', 'porn', 'sexo', 'xxx', 'hentai', 'desnudo']; 
-    const lowerText = text.toLowerCase();
-    
     try {
-        // 1. Buscamos las imágenes (Usando una API pública estable)
-        // Nota: He puesto una URL directa para que no dependas de global.APIs
-        const res = await axios.get(`https://api.screenshotlayer.com/api/search?query=${encodeURIComponent(text)}`).catch(() => null);
+        const axios = require('axios');
         
-        // Si esa falla, usamos esta otra que es muy buena para bots:
-        const searchUrl = `https://api.egglord.xyz/api/search/google-images?query=${encodeURIComponent(text)}`;
-        const response = await axios.get(searchUrl);
-        const results = response.data.results || [];
+        // Configuramos la petición
+        const options = {
+            method: 'POST',
+            url: 'https://ai-text-to-image-generator-flux-free-api.p.rapidapi.com/aaaaaaaaaaaaaaaaaiimagegenerator/quick.php',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-rapidapi-host': 'ai-text-to-image-generator-flux-free-api.p.rapidapi.com',
+                'x-rapidapi-key': 'Escribe_aquí_tu_Key_de_RapidAPI' 
+            },
+            data: {
+                prompt: text,
+                style_id: 4,
+                size: '1-1'
+            }
+        };
 
-        if (results.length === 0) return await sock.sendMessage(from, { text: '《✧》 No encontré imágenes para esa búsqueda.' }, { quoted: m });
+        await sock.sendMessage(from, { text: `⏳ Generando 2 imágenes de "${text}" con FLUX...` });
 
-        // 2. Seleccionamos la primera imagen válida
-        const imgUrl = results[0].url;
+        const response = await axios.request(options);
+        
+        // Accedemos a la ruta exacta: response.data.final_result
+        const results = response.data.final_result;
 
-        // 3. Enviamos la imagen con el diseño que te gusta
-        await sock.sendMessage(from, { 
-            image: { url: imgUrl }, 
-            caption: `ㅤ۟∩　ׅ　★　ׅ　🅖oogle 🅘mage 🅢earch　ׄᰙ　\n\n` +
-                     `𖣣ֶㅤ֯⌗ ☆  ⬭ *Búsqueda* › ${text}\n` +
-                     `𖣣ֶㅤ֯⌗ ☆  ⬭ *Fuente* › Google`
-        }, { quoted: m });
+        if (!results || results.length === 0) {
+            return sock.sendMessage(from, { text: '❌ La IA no pudo generar las imágenes en este momento.' });
+        }
 
-    } catch (e) {
-        console.log(e);
-        await sock.sendMessage(from, { text: `> Ocurrió un error al buscar la imagen.` }, { quoted: m });
+        // Enviamos las 2 imágenes que genera la API
+        for (const item of results) {
+            await sock.sendMessage(from, { 
+                image: { url: item.origin }, // Usamos 'origin' para máxima calidad
+                caption: `✨ *IA FLUX:* ${text}\n🔞 *NSFW:* ${item.nsfw ? 'Sí' : 'No'}`
+            }, { quoted: m });
+        }
+
+    } catch (error) {
+        console.error("ERROR EN FLUX API:", error);
+        sock.sendMessage(from, { text: '❌ Hubo un error al conectar con el servidor de IA.' });
     }
 }
 break;
