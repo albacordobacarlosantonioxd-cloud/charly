@@ -1490,7 +1490,7 @@ case 'flux': {
             headers: {
                 'Content-Type': 'application/json',
                 'x-rapidapi-host': 'ai-text-to-image-generator-flux-free-api.p.rapidapi.com',
-                'x-rapidapi-key': 'Escribe_aquí_tu_Key_de_RapidAPI' 
+                'x-rapidapi-key': ' e774e5f65fmsh8a64771078f8baap19a40cjsn79a68c1e252f' 
             },
             data: {
                 prompt: text,
