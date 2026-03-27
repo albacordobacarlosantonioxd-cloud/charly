@@ -237,17 +237,16 @@ if (!prefix) return;
 const command = body.slice(prefix.length).trim().split(/ +/).shift().toLowerCase();
 const args = body.trim().split(/ +/).slice(1);
 const text = args.join(" ");
-const pushname = m.pushName || 'Usuario'; // Esto extrae el nombre de quien escribe
+const pushName = m.pushName || 'Usuario'; 
 
-// Línea 179 aprox:
-// --- LÓGICA CON MONGODB (Reemplazo de la 240-245) ---
+// 2. Buscamos en MongoDB
 let user = await User.findOne({ jid: sender });
 
 if (!user) {
-    // Si no existe en la base de datos, lo creamos
+    // Si no existe, lo creamos con sus 100 moneditas de bienvenida
     user = new User({ 
         jid: sender, 
-        name: pushName || 'Usuario',
+        name: pushName, // Usamos la constante que definimos arriba
         money: 100, 
         usedcommands: 0 
     });
