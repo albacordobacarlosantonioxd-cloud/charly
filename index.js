@@ -405,7 +405,18 @@ if (chatId && chatId.endsWith('@g.us')) {
 
 ///////////////
 
-
+function calcularProgreso(nivel, expActual) {
+    const xpBase = 500; // Experiencia para subir del nivel 1 al 2
+    const xpNeeded = nivel * xpBase; // Cada nivel pide más XP
+    const porcentaje = Math.min(Math.floor((expActual / xpNeeded) * 100), 100);
+    
+    // Creamos la barra visual (10 bloques)
+    const bloquesLlenos = Math.floor(porcentaje / 10);
+    const bloquesVacios = 10 - bloquesLlenos;
+    const progresoBarra = '▰'.repeat(bloquesLlenos) + '▱'.repeat(bloquesVacios);
+    
+    return { xpNeeded, progresoBarra, porcentaje };
+}
 
 //////////////
 
@@ -2145,40 +2156,35 @@ case 'w': case 'work': case 'chambear': case 'chamba': case 'trabajar': {
 break;
 
 case 'profile': case 'perfil': {
-    // 1. Aseguramos que el usuario exista en la memoria
-    if (!db.users[sender]) db.users[sender] = { id: sender };
-    const user = db.users[sender];
+    try {
+        // 1. Buscamos al usuario en MongoDB
+        let user = await User.findOne({ jid: sender });
 
-    // 2. Extraemos los datos (si no existen, ponemos valores por defecto)
-    const name = m.pushName || user.name || 'Usuario';
-    const birth = user.birth || 'Sin especificar';
-    const genero = user.genre || 'Oculto';
-    
-    // Si quieres que el contador de comandos funcione, hay que sumarle uno aquí
-    user.usedcommands = (user.usedcommands || 0) + 1;
-    await saveDB(sender); // Guardamos este pequeño cambio en la nube
+        if (!user) {
+            user = new User({ jid: sender, name: m.pushName || 'Usuario', money: 100 });
+            await user.save();
+        }
 
-    const exp = user.exp || 0;
-    const nivel = user.level || 1;
-    const dinero = user.money || 0;
-    const pasatiempo = user.pasatiempo || 'No definido';
-    const desc = user.description ? `\n> _${user.description}_` : '';
-    
-    // 3. Lógica de pareja (Buscamos el nombre del esposo/a en la DB)
-    const parejaId = user.marry;
-    let parejaNombre = 'Nadie';
-    if (parejaId) {
-        // Intentamos sacar el nombre si el bot lo tiene registrado, si no, el número
-        parejaNombre = db.users[parejaId]?.name || `@${parejaId.split('@')[0]}`;
-    }
-    
-    const estadoCivil = genero === 'Mujer' ? 'Casada con' : genero === 'Hombre' ? 'Casado con' : 'Casadx con';
+        // 2. Extraemos los datos (o valores por defecto)
+        const name = user.name || m.pushName || 'Usuario';
+        const desc = user.description ? `\n\n_${user.description}_` : '';
+        const birth = user.birthday || 'No definido';
+        const pasatiempo = user.hobby || 'No definido';
+        const genero = user.gender || 'No definido';
+        const dinero = user.money || 0;
+        const exp = user.exp || 0;
+        const nivel = user.level || 1;
+        
+        // Manejo de pareja/matrimonio
+        const parejaId = user.marry;
+        const parejaNombre = user.marryName || 'Alguien especial';
+        const estadoCivil = parejaId ? 'Casado con' : 'Estado Civil';
 
-    // 4. Rango y Progreso
-    // Nota: Asegúrate de tener tu función 'calcularProgreso' definida en el index.js
-    const { xp, progresoActual, porcentaje } = calcularProgreso(nivel, exp);
+        // 3. Calculamos el progreso (Usando la función de arriba)
+        const { xpNeeded, progresoBarra, porcentaje } = calcularProgreso(nivel, exp);
 
-    const profileText = `「✿」 *PERFIL DE USUARIO* 「✿」
+        // 4. El diseño que querías (Mantenemos los emojis)
+        const profileText = `「✿」 *PERFIL DE USUARIO* 「✿」
     
 ◢ *${name}* ◤${desc}
 
@@ -2190,42 +2196,31 @@ case 'profile': case 'perfil': {
 📊 *ESTADÍSTICAS*
 ✿ *Nivel:* ${nivel}
 ❀ *Experiencia:* ${exp.toLocaleString()}
-➨ *Progreso:* ${progresoActual} ➔ ${xp} _(${porcentaje}%)_
+➨ *Progreso:* ${progresoBarra} ➔ ${xpNeeded} _(${porcentaje}%)_
 
 💰 *Cartera:* $${dinero.toLocaleString()}
-❒ *Comandos:* ${user.usedcommands.toLocaleString()}
-☁️ _Datos protegidos en MongoDB Atlas_`;
+❒ *Comandos:* ${user.usedcommands?.toLocaleString() || 0}`;
 
-    // 5. Foto de perfil
-    let pp = 'https://cdn.yuki-wabot.my.id/files/2PVh.jpeg'; // Foto por defecto
-    try { 
-        pp = await sock.profilePictureUrl(sender, 'image'); 
-    } catch {
-        // Si no tiene foto o falla, se queda la de por defecto
+        // 5. OBTENEMOS LA FOTO DE PERFIL
+        let ppUrl;
+        try {
+            ppUrl = await sock.profilePictureUrl(sender, 'image'); // Intenta sacar la foto
+        } catch {
+            // Imagen por defecto si no tiene foto o la tiene oculta
+            ppUrl = 'https://telegra.ph/file/24fa902336e970f3f6f03.jpg'; 
+        }
+
+        // 6. Enviamos la FOTO con el TEXTO como caption
+        await sock.sendMessage(from, { 
+            image: { url: ppUrl }, 
+            caption: profileText,
+            mentions: [sender] 
+        }, { quoted: m });
+
+    } catch (e) {
+        console.error("ERROR EN PERFIL:", e);
+        await sock.sendMessage(from, { text: '❌ No pude cargar tu perfil, pariente.' });
     }
-
-    await sock.sendMessage(from, { 
-        image: { url: pp }, 
-        caption: profileText,
-        mentions: parejaId ? [parejaId] : [] // Mencionamos a la pareja para que el link funcione
-    }, { quoted: m });
-}
-break;
-// --- SETTERS (Para poner datos) ---
-// --- CONFIGURAR GÉNERO ---
-case 'setgenre': {
-    const genresList = ['Hombre', 'Mujer', 'Femboy', 'Transgénero', 'Gay', 'Lesbiana', 'No Binario']; 
-    if (!text) return await sock.sendMessage(from, { text: `《✧》 Elige un género:\n${genresList.map((g, i) => `${i+1}. ${g}`).join('\n')}` }, { quoted: m });
-
-    const choice = parseInt(text) - 1;
-    const generoSelec = genresList[choice] || text;
-    
-    if (!db.users[sender]) db.users[sender] = {};
-    db.users[sender].genre = generoSelec; 
-    
-    await saveDB(sender); // Guarda en MongoDB
-
-    await sock.sendMessage(from, { text: `✎ Género establecido como: *${generoSelec}*` }, { quoted: m });
 }
 break;
 
