@@ -1477,7 +1477,7 @@ case 'manga': {
 break;
 ////////
 
-case 'imagen': case 'img': case 'image': {
+case 'images': {
     const axios = require('axios');
     const text = args.join(' ');
     
@@ -1700,6 +1700,51 @@ case 'ia': case 'llama': case 'chatgpt': {
     }
 }
 break;
+
+////////
+
+case 'imagen':
+case 'google':
+case 'img': {
+    // 1. Validamos que haya texto después del comando
+    if (!text) return sock.sendMessage(from, { text: `¿Qué buscamos en Google Imágenes? Ejemplo: ${usedPrefix + command} yamaha mt09` });
+
+    try {
+        const axios = require('axios');
+        const apiKey = "sylphy-ty5xtWm";
+        // 2. Hacemos la petición a la API de Sylphy
+        const response = await axios.get(`https://sylphy.xyz/search/image?q=${encodeURIComponent(text)}&api_key=${apiKey}`);
+        
+        // 3. La API de Sylphy devuelve directamente un array [], así que validamos la data
+        const results = response.data;
+
+        if (!results || !Array.isArray(results) || results.length === 0) {
+            return sock.sendMessage(from, { text: `❌ No encontré imágenes para: *${text}*` });
+        }
+
+        // 4. Avisamos que estamos buscando (opcional, para que el usuario no desespere)
+        await sock.sendMessage(from, { text: `⏳ Buscando 3 imágenes de: *${text}*...` });
+
+        // 5. Tomamos las primeras 3 imágenes del array
+        const top3 = results.slice(0, 3);
+
+        // 6. Enviamos las 3 imágenes una por una
+        for (const item of top3) {
+            if (item.url) {
+                await sock.sendMessage(from, { 
+                    image: { url: item.url }, 
+                    caption: `✅ *Resultado:* ${text}\n🌐 *Fuente:* ${item.source || 'Google'}` 
+                }, { quoted: m });
+            }
+        }
+
+    } catch (e) {
+        console.error("ERROR GOOGLE IMG:", e);
+        await sock.sendMessage(from, { text: '❌ Hubo un fallo al conectar con la API de imágenes.' });
+    }
+}
+break; 
+
 
 ////////
             case 'menu':
