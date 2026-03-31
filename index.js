@@ -249,45 +249,38 @@ sock = makeWASocket({  // <--- SIN EL 'CONST' AL PRINCIPIO
     });
 
 
-    // --- MANEJO DE MENSAJES ---
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        // 🚩 EL FILTRO: Esto evita que mande doble mensaje
-        if (type !== 'notify') return; 
+sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    const m = messages[0];
+    if (!m.message) return;
 
-        const m = messages[0];
-        if (!m.message || m.key.fromMe) return;
+    // 1. Definimos los prefijos UNA SOLA VEZ al principio
+    const prefixes = ['.', '!', '/', '#', '$'];
 
-        // Aquí ya sigue todo tu código de comandos...
-        const from = m.key.remoteJid;
-        const body = m.message.conversation || m.message.extendedTextMessage?.text || "";
-        // ... (el resto de tu lógica de comandos)
-    });
+    // 2. Extraemos el cuerpo del mensaje (Body)
+    const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "";
+    
+    // 3. Filtro Inteligente para que el bot te lea a TI (fromMe)
+    const isMe = m.key.fromMe;
+    const prefix = prefixes.find(p => body.startsWith(p)); // Buscamos el prefijo
+    const isCommand = !!prefix; // Es true si encontró un prefijo
 
-    // ... (Aquí sigue el resto de tu lógica de mensajes)
-    sock.ev.on('messages.upsert', async ({ messages }) => {
-        const m = messages[0];
-        if (!m.message || m.key.fromMe) return;
+    // Si el mensaje es del bot pero NO es un comando, lo ignoramos para evitar bucles infinitos
+    if (isMe && !isCommand) return; 
 
-        const from = m.key.remoteJid;
-        const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "";
-        const sender = m.key.participant || from;
-        const isGroup = from.endsWith('@g.us'); 
-        
-// 1. Definimos la lista de prefijos permitidos
-const prefixes = ['.', '!', '/', '#', '$']; 
+    // 4. Definimos quién manda el mensaje (Sender)
+    // Si eres tú (fromMe), usamos tu ID del bot para que cargue tus datos de MongoDB
+    const from = m.key.remoteJid;
+    const sender = isMe ? (sock.user.id.split(':')[0] + '@s.whatsapp.net') : (m.key.participant || from);
+    const isGroup = from.endsWith('@g.us');
 
-// 2. Buscamos cuál de esos prefijos usó el usuario
-const prefix = prefixes.find(p => body.startsWith(p));
+    // 5. Si no es comando, aquí cortamos la ejecución
+    if (!isCommand) return;
 
-// 3. Si no usó ninguno de la lista, ignoramos el mensaje
-if (!prefix) return;
-
-// 4. Separamos el comando del prefijo para que el 'case' funcione igual
-const command = body.slice(prefix.length).trim().split(/ +/).shift().toLowerCase();
-const args = body.trim().split(/ +/).slice(1);
-const text = args.join(" ");
-const pushName = m.pushName || 'Usuario'; 
-
+    // 6. Preparamos las variables del comando
+    const command = body.slice(prefix.length).trim().split(/ +/).shift().toLowerCase();
+    const args = body.trim().split(/ +/).slice(1);
+    const text = args.join(" ");
+    const pushName = m.pushName || 'Usuario';
 
 // ========================================================
 // 🛡️ AQUÍ PEGA LA SINCRONIZACIÓN (NUBE -> RAM)
