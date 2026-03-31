@@ -90,26 +90,47 @@ const SYLPHY_KEY = "sylphy-ty5xtWm";
 const STELLAR_KEY = "api-qG4nw";
 const DB_PATH = './database.json';
 
+
+
+// JUSTO DEBAJO DE TUS REQUIRES
+let db = {
+    users: {},
+    groups: {},
+    settings: {}
+};
+global.db = db; // Esto hace que 'db' sea visible en todo el código
+
 const mongoose = require('mongoose');
 const mongoURI = 'mongodb+srv://adminbot:adminbot@cluster0.q2q0czd.mongodb.net/BotDatabase?retryWrites=true&w=majority';
+
+
+
+
 
 // 1. UN SOLO SCHEMA PARA TODO (Dinero, Comandos e Historial)
 // --- 1. MODELO ÚNICO DE USUARIO (Fusionado) ---
 const UserSchema = new mongoose.Schema({
     jid: { type: String, required: true, unique: true },
     name: { type: String, default: 'Usuario' },
-    usedcommands: { type: Number, default: 0 },
     money: { type: Number, default: 100 },
-    // --- CAMPOS PARA EL PERFIL ---
-    birthday: { type: String, default: 'No definido' },
+    lastwork: { type: Number, default: 0 }, // Para el cooldown de la chamba
+    lastDailyGlobal: { type: Number, default: 0 },
+    streak: { type: Number, default: 0 },
+    usedcommands: { type: Number, default: 0 },
+    
+    // Datos del Perfil
+    birth: { type: String, default: 'No definido' },
     hobby: { type: String, default: 'No definido' },
     gender: { type: String, default: 'No definido' },
     description: { type: String, default: 'Sin descripción' },
-    // --- ESTADÍSTICAS ---
-    level: { type: Number, default: 1 },
-    exp: { type: Number, default: 0 },
+    
+    // Relaciones
     marry: { type: String, default: null },
-    marryName: { type: String, default: 'Nadie' }
+    marryName: { type: String, default: 'Nadie' },
+    
+    // Niveles
+    level: { type: Number, default: 1 },
+    exp: { type: Number, default: 0 }
 });
 // Solo una vez declaramos el modelo User
 const User = mongoose.model('User', UserSchema);
@@ -267,20 +288,46 @@ const args = body.trim().split(/ +/).slice(1);
 const text = args.join(" ");
 const pushName = m.pushName || 'Usuario'; 
 
-// 2. Buscamos en MongoDB
-let user = await User.findOne({ jid: sender });
 
-if (!user) {
-    // Si no existe, lo creamos con sus 100 moneditas de bienvenida
-    user = new User({ 
-        jid: sender, 
-        name: pushName, // Usamos la constante que definimos arriba
-        money: 100, 
-        usedcommands: 0 
-    });
-    await user.save();
-    console.log(`✨ Usuario registrado en MongoDB: ${sender}`);
+// ========================================================
+// 🛡️ AQUÍ PEGA LA SINCRONIZACIÓN (NUBE -> RAM)
+// ========================================================
+if (!db.users[sender]) {
+    let userDoc = await User.findOne({ jid: sender });
+    if (userDoc) {
+        // Si existe en Mongo, lo pasamos a la RAM para que el bot sea rápido
+        db.users[sender] = {
+            id: sender,
+            name: userDoc.name || pushName,
+            money: userDoc.money || 100,
+            lastwork: userDoc.lastwork || 0,
+            birth: userDoc.birth || 'No definido',
+            pasatiempo: userDoc.hobby || 'No definido', // Mapeamos hobby a pasatiempo
+            description: userDoc.description || 'Sin descripción',
+            gender: userDoc.gender || 'No definido',
+            streak: userDoc.streak || 0,
+            lastDailyGlobal: userDoc.lastDailyGlobal || 0,
+            marry: userDoc.marry || null,
+            marryName: userDoc.marryName || 'Nadie',
+            level: userDoc.level || 1,
+            exp: userDoc.exp || 0
+        };
+        console.log(`📥 Datos cargados desde Mongo para: ${pushName}`);
+    } else {
+        // Si es un usuario totalmente nuevo, lo inicializamos en la RAM
+        db.users[sender] = { 
+            id: sender, 
+            name: pushName, 
+            money: 100, 
+            lastwork: 0,
+            usedcommands: 0 
+        };
+    }
 }
+// ========================================================
+
+// 2. Buscamos en MongoDB (Esto ya lo tenías, puedes dejarlo o unirlo arriba)
+let user = db.users[sender];
         // Admin Check
         let isAdmin = false;
         if (isGroup) {
@@ -2314,6 +2361,40 @@ case 'setdesc': case 'setdescription': {
     await sock.sendMessage(from, { text: `✎ Se ha establecido tu descripción correctamente.` }, { quoted: m });
 }
 break;
+
+case 'setgenre': case 'setgenero': {
+    // 1. Verificamos que el usuario elija una opción
+    if (!text) return await sock.sendMessage(from, { 
+        text: `《✧》 Elige tu género.\n\n*Opciones:* .setgenre Hombre | Mujer | Binario` 
+    }, { quoted: m });
+
+    // Normalizamos el texto (Primera letra Mayúscula, lo demás minúscula)
+    const generoValido = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+
+    try {
+        // 2. Guardamos DIRECTO en MongoDB usando el modelo 'User'
+        await User.updateOne(
+            { jid: sender }, 
+            { $set: { gender: generoValido } }, 
+            { upsert: true }
+        );
+
+        // 3. Actualizamos la memoria RAM (db.users)
+        if (!db.users[sender]) db.users[sender] = {};
+        db.users[sender].gender = generoValido;
+
+        // 4. Mensaje de confirmación
+        await sock.sendMessage(from, { 
+            text: `✨ ¡Listo! Tu género se ha actualizado a: *${generoValido}*\n\n> Ya puedes verlo en tu .perfil` 
+        }, { quoted: m });
+        
+    } catch (e) {
+        console.error("Error al guardar género en Mongo:", e);
+        await sock.sendMessage(from, { text: '❌ Hubo un error al conectar con la base de datos.' }, { quoted: m });
+    }
+}
+break;
+
 
 case 'sethobby': case 'setpasatiempo': {
     if (!text) return await sock.sendMessage(from, { text: `《✧》 Escribe tu pasatiempo favorito.` }, { quoted: m });
