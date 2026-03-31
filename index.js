@@ -100,8 +100,16 @@ const UserSchema = new mongoose.Schema({
     name: { type: String, default: 'Usuario' },
     usedcommands: { type: Number, default: 0 },
     money: { type: Number, default: 100 },
-    history: { type: Array, default: [] },
-    marry: { type: String, default: null } // <-- SI NO ESTÁ ESTA LÍNEA, NO VA A GUARDAR NADA
+    // --- CAMPOS PARA EL PERFIL ---
+    birthday: { type: String, default: 'No definido' },
+    hobby: { type: String, default: 'No definido' },
+    gender: { type: String, default: 'No definido' },
+    description: { type: String, default: 'Sin descripción' },
+    // --- ESTADÍSTICAS ---
+    level: { type: Number, default: 1 },
+    exp: { type: Number, default: 0 },
+    marry: { type: String, default: null },
+    marryName: { type: String, default: 'Nadie' }
 });
 // Solo una vez declaramos el modelo User
 const User = mongoose.model('User', UserSchema);
@@ -110,7 +118,8 @@ const User = mongoose.model('User', UserSchema);
 const GroupSchema = new mongoose.Schema({
     id: { type: String, unique: true }, 
 onlyAdmin: { type: Boolean, default: false }, // Lo que hicimos hace rato
-    antilink: { type: Boolean, default: false } // <-- AGREGA ESTA LÍNEA AHORA
+    antilink: { type: Boolean, default: false }, // <-- AGREGA ESTA LÍNEA AHORA
+ nsfw: { type: Boolean, default: false } // <-- AGREGA ESTA LÍNEA
 });
 
 const Group = mongoose.model('Group', GroupSchema);
@@ -125,11 +134,34 @@ mongoose.connect(mongoURI)
 // 4. Función saveDB corregida
 async function saveDB(sender) {
     try {
+        const userData = db.users[sender] || {};
+
         await User.findOneAndUpdate(
             { jid: sender }, 
             { 
-                $inc: { usedcommands: 1 },
-                $setOnInsert: { money: 100, history: [] } 
+                $inc: { usedcommands: 1 }, 
+                $set: { 
+                    // ECONOMÍA
+                    money: userData.money || 100,
+                    
+                    // PERFIL (Nombres exactos que usa tu perfil)
+                    birth: userData.birth || 'No definido', // user.birth
+                    hobby: userData.pasatiempo || 'No definido', // user.hobby (mapeado de la RAM)
+                    gender: userData.gender || 'No definido', // user.gender
+                    description: userData.description || 'Sin descripción',
+                    
+                    // ESTADÍSTICAS
+                    exp: userData.exp || 0, // user.exp
+                    level: userData.level || 1, // user.level
+                    
+                    // RELACIONES
+                    marry: userData.marry || null, // user.marry
+                    marryName: userData.marryName || 'Alguien especial', // user.marryName
+
+                    // RACHAS (Para el Daily)
+                    streak: userData.streak || 0,
+                    lastDailyGlobal: userData.lastDailyGlobal || 0
+                }
             }, 
             { 
                 upsert: true, 
@@ -138,14 +170,10 @@ async function saveDB(sender) {
             }
         );
     } catch (e) {
-        if (e.code === 11000) {
-            console.log("⚠️ Limpiando índices antiguos...");
-            User.collection.dropIndex('id_1').catch(() => {});
-        } else {
-            console.error("❌ Error en MongoDB:", e);
-        }
+        console.error("❌ Error al sincronizar con MongoDB:", e);
     }
 }
+
 
 // ✅ FUNCIÓN GLOBAL EXPANDURL
 async function expandUrl(url) {
@@ -312,10 +340,11 @@ const apiAction = nsfwAlias[command] || (nsfwActions.includes(command) ? command
 
 if (apiAction) {
     // Filtro SFW para que no te quemen el bot en grupos familiares
-    if (isGroup && db.groups[from]?.sfw) {
-        return sock.sendMessage(from, { text: '🚫 *Modo SFW activo:* Pórtense bien, parientes.' }, { quoted: m });
-    }
-
+if (isGroup && !groupData?.nsfw) {
+    return sock.sendMessage(from, { 
+        text: '🚫 *Modo NSFW desactivado:* Aquí no se permiten esas cochinadas, pariente. Váyase al privado.' 
+    }, { quoted: m });
+}
     try {
         const apiKey = 'api-qG4nw'; // Tu llave de Stellar
         const emisor = m.pushName || 'Usuario';
@@ -1192,26 +1221,24 @@ break;
 
 //////////
 
-case 'nsfw': {
-    if (!isGroup) return sock.sendMessage(from, { text: '❌ Este comando solo sirve en grupos, pariente.' });
-    if (!isAdmin) return sock.sendMessage(from, { text: '❌ Solo los admins pueden moverle a esto.' });
+// Comando: !nsfw on / !nsfw off
+if (command === 'nsfw') {
+    if (!isGroup) return reply('Este comando solo sirve en grupos.');
+    if (!isGroupAdmins) return reply('Solo los admins pueden usar esto, pariente.');
+    if (!args[0]) return reply('¿Qué onda? ¿Lo prendes o lo apagas? Usa: *!nsfw on* o *!nsfw off*');
 
-    if (text === 'on') {
-        // ACTIVAR EL DESMADRE (Apagamos el filtro SFW)
-        db.groups[from].sfw = false; 
-        saveDB();
-        await sock.sendMessage(from, { text: '😈 *Modo NSFW Activado.* \nYa pueden usar .fuck y .r34. ¡Bajo su propio riesgo!' });
-    } else if (text === 'off') {
-        // DESACTIVAR EL DESMADRE (Prendemos el filtro SFW)
-        db.groups[from].sfw = true; 
-        saveDB();
-        await sock.sendMessage(from, { text: '😇 *Modo NSFW Desactivado.* \nComandos prohibidos bloqueados. ¡Pórtense bien!' });
-    } else {
-        const estado = !db.groups[from].sfw ? "ON (Activado 🔞)" : "OFF (Desactivado 😇)";
-        await sock.sendMessage(from, { text: `🧐 El modo NSFW está: *${estado}*\n\nUsa:\n*.nsfw on* para permitir desmadre.\n*.nsfw off* para prohibirlo.` });
-    }
+    const action = args[0].toLowerCase() === 'on'; // true si es 'on', false si es cualquier otra cosa
+
+    // Actualizamos MongoDB
+    await Group.updateOne(
+        { id: from }, 
+        { nsfw: action }, 
+        { upsert: true } // Esto crea el registro si el grupo es nuevo
+    );
+
+    const estado = action ? '✅ *Activado*: Ya pueden andar de puercos.' : '🚫 *Desactivado*: Modo santo activado.';
+    return sock.sendMessage(from, { text: estado }, { quoted: m });
 }
-break;
 
 ////////
 
@@ -2204,33 +2231,37 @@ break;
 
 case 'profile': case 'perfil': {
     try {
-        // 1. Buscamos al usuario en MongoDB
+        // 1. Buscamos al usuario en MongoDB para tener los datos más frescos
         let user = await User.findOne({ jid: sender });
 
+        // Si no existe en Mongo, lo creamos de una vez
         if (!user) {
-            user = new User({ jid: sender, name: m.pushName || 'Usuario', money: 100 });
+            user = new User({ jid: sender, name: m.pushName || 'Usuario' });
             await user.save();
         }
 
-        // 2. Extraemos los datos (o valores por defecto)
+        // 2. Extraemos los datos usando los nombres exactos de tu Schema/saveDB
         const name = user.name || m.pushName || 'Usuario';
-        const desc = user.description ? `\n\n_${user.description}_` : '';
-        const birth = user.birthday || 'No definido';
-        const pasatiempo = user.hobby || 'No definido';
+        const desc = user.description && user.description !== 'Sin descripción' ? `\n\n_${user.description}_` : '';
+        
+        // --- AQUÍ ESTÁ LA MAGIA: Sincronía total con saveDB ---
+        const birth = user.birth || 'No definido';
+        const pasatiempo = user.hobby || 'No definido'; 
         const genero = user.gender || 'No definido';
         const dinero = user.money || 0;
+        const comandos = user.usedcommands || 0;
+        
+        // Estadísticas y Nivel
         const exp = user.exp || 0;
         const nivel = user.level || 1;
-        
-        // Manejo de pareja/matrimonio
+        const { xpNeeded, progresoBarra, porcentaje } = calcularProgreso(nivel, exp);
+
+        // Pareja
         const parejaId = user.marry;
         const parejaNombre = user.marryName || 'Alguien especial';
         const estadoCivil = parejaId ? 'Casado con' : 'Estado Civil';
 
-        // 3. Calculamos el progreso (Usando la función de arriba)
-        const { xpNeeded, progresoBarra, porcentaje } = calcularProgreso(nivel, exp);
-
-        // 4. El diseño que querías (Mantenemos los emojis)
+        // 3. El Diseño Visual
         const profileText = `「✿」 *PERFIL DE USUARIO* 「✿」
     
 ◢ *${name}* ◤${desc}
@@ -2246,18 +2277,17 @@ case 'profile': case 'perfil': {
 ➨ *Progreso:* ${progresoBarra} ➔ ${xpNeeded} _(${porcentaje}%)_
 
 💰 *Cartera:* $${dinero.toLocaleString()}
-❒ *Comandos:* ${user.usedcommands?.toLocaleString() || 0}`;
+❒ *Comandos:* ${comandos.toLocaleString()}`;
 
-        // 5. OBTENEMOS LA FOTO DE PERFIL
+        // 4. Obtener Foto de Perfil
         let ppUrl;
         try {
-            ppUrl = await sock.profilePictureUrl(sender, 'image'); // Intenta sacar la foto
+            ppUrl = await sock.profilePictureUrl(sender, 'image');
         } catch {
-            // Imagen por defecto si no tiene foto o la tiene oculta
-            ppUrl = 'https://telegra.ph/file/24fa902336e970f3f6f03.jpg'; 
+            ppUrl = 'https://telegra.ph/file/24fa902336e970f3f6f03.jpg'; // Imagen por defecto
         }
 
-        // 6. Enviamos la FOTO con el TEXTO como caption
+        // 5. Envío del mensaje
         await sock.sendMessage(from, { 
             image: { url: ppUrl }, 
             caption: profileText,
@@ -2266,18 +2296,20 @@ case 'profile': case 'perfil': {
 
     } catch (e) {
         console.error("ERROR EN PERFIL:", e);
-        await sock.sendMessage(from, { text: '❌ No pude cargar tu perfil, pariente.' });
+        await sock.sendMessage(from, { text: '❌ No pude cargar tu perfil, pariente.' }, { quoted: m });
     }
 }
 break;
 
 case 'setdesc': case 'setdescription': {
-    if (!text) return await sock.sendMessage(from, { text: `《✧》 Debes especificar una descripción.\n✐ Ejemplo: .setdesc Hola, soy fan de Nanatsu!` }, { quoted: m });
+    if (!text) return await sock.sendMessage(from, { text: `《✧》 Debes especificar una descripción.` }, { quoted: m });
     
+    // GUARDAR DIRECTO EN MONGO
+    await User.updateOne({ jid: sender }, { $set: { description: text } }, { upsert: true });
+    
+    // Opcional: Actualizar la memoria local para que se vea el cambio sin reiniciar
     if (!db.users[sender]) db.users[sender] = {};
-    db.users[sender].description = text; 
-    
-    await saveDB(sender);
+    db.users[sender].description = text;
 
     await sock.sendMessage(from, { text: `✎ Se ha establecido tu descripción correctamente.` }, { quoted: m });
 }
@@ -2286,37 +2318,39 @@ break;
 case 'sethobby': case 'setpasatiempo': {
     if (!text) return await sock.sendMessage(from, { text: `《✧》 Escribe tu pasatiempo favorito.` }, { quoted: m });
     
-    if (!db.users[sender]) db.users[sender] = {};
-    db.users[sender].pasatiempo = text; 
+    await User.updateOne({ jid: sender }, { $set: { hobby: text } }, { upsert: true });
     
-    await saveDB(sender);
+    if (!db.users[sender]) db.users[sender] = {};
+    db.users[sender].hobby = text; 
 
     await sock.sendMessage(from, { text: `✐ Se ha establecido tu pasatiempo: *${text}*` }, { quoted: m });
 }
 break;
 
 case 'setbirth': case 'setcumple': {
-    // 1. Verificamos que el usuario haya escrito algo
     if (!text) return await sock.sendMessage(from, { 
         text: `《✧》 Escribe tu fecha de nacimiento.\n\n✐ *Ejemplo:* .setbirth 15 de Octubre` 
     }, { quoted: m });
 
-    // 2. Aseguramos que el usuario exista en la memoria local
-    if (!db.users[sender]) db.users[sender] = { id: sender };
-    
-    // 3. Guardamos la fecha en el objeto local
-    db.users[sender].birth = text;
-
-    // 4. ¡A LA NUBE! Guardamos en MongoDB
     try {
-        await saveDB(sender);
-        
+        // 1. Guardamos DIRECTO en la base de datos usando el modelo 'User'
+        // Esto busca por JID y actualiza (o crea) el campo 'birth'
+        await User.updateOne(
+            { jid: sender }, 
+            { $set: { birth: text } }, 
+            { upsert: true }
+        );
+
+        // 2. Opcional: Actualizamos la memoria local por si acaso
+        if (!db.users[sender]) db.users[sender] = {};
+        db.users[sender].birth = text;
+
         await sock.sendMessage(from, { 
             text: `🎂 ¡Listo! Tu fecha de nacimiento se ha guardado como: *${text}*\n\n> Ahora aparecerá en tu .perfil para siempre.` 
         }, { quoted: m });
         
     } catch (e) {
-        console.error("Error al guardar el cumple en Mongo:", e);
+        console.error("Error al guardar en MongoDB:", e);
         await sock.sendMessage(from, { text: '❌ Hubo un error al conectar con la base de datos.' }, { quoted: m });
     }
 }
@@ -2524,61 +2558,77 @@ case 'marry': case 'casarse': {
 break;
 
 
-
 case 'divorce': case 'divorciarse': {
-    if (!db.users[sender]) db.users[sender] = {};
-    const user = db.users[sender];
-    const parejaId = user.marry;
+    // 1. Buscamos al usuario que pide el divorcio en Mongo
+    let user = await User.findOne({ jid: sender });
+    const parejaId = user?.marry;
 
-    if (!parejaId) return await sock.sendMessage(from, { text: '《✧》 No tienes de quién divorciarte.' }, { quoted: m });
+    if (!parejaId || parejaId === "") {
+        return await sock.sendMessage(from, { text: '《✧》 No tienes de quién divorciarte, pariente. Estás más solo que la una.' }, { quoted: m });
+    }
 
-    const exPareja = db.users[parejaId];
-    user.marry = ""; 
-    if (exPareja) exPareja.marry = ""; 
-    
-    // GUARDADO EN MONGODB (Ambos usuarios)
-    await saveDB(sender); 
-    if (parejaId) await saveDB(parejaId); 
+    try {
+        // 2. ACTUALIZACIÓN EN MONGO: Limpiamos a los dos de un solo golpe
+        // Al que pide el divorcio:
+        await User.updateOne({ jid: sender }, { $set: { marry: null, marryName: 'Nadie' } });
+        
+        // A la ex-pareja (aunque no esté en la RAM en este momento):
+        await User.updateOne({ jid: parejaId }, { $set: { marry: null, marryName: 'Nadie' } });
 
-    await sock.sendMessage(from, { text: `💔 Te has divorciado legalmente.` }, { quoted: m });
+        // 3. Sincronizamos la RAM (Opcional, para que el cambio sea instantáneo)
+        if (db.users[sender]) {
+            db.users[sender].marry = null;
+            db.users[sender].marryName = 'Nadie';
+        }
+        if (db.users[parejaId]) {
+            db.users[parejaId].marry = null;
+            db.users[parejaId].marryName = 'Nadie';
+        }
+
+        await sock.sendMessage(from, { 
+            text: `💔 *DIVORCIO LEGALIZADO*\n\nTe has divorciado de @${parejaId.split('@')[0]}. Ya puedes buscar un nuevo amor.`,
+            mentions: [parejaId]
+        }, { quoted: m });
+
+    } catch (e) {
+        console.error("Error en divorcio:", e);
+        reply('❌ Hubo un error en el registro civil de MongoDB.');
+    }
 }
 break;
 
 
 case 'acept': case 'aceptar': {
-    const proposee = sender; // Tú (el que acepta)
-    const proposer = global.proposals[proposee]; // El que mandó la propuesta
+    const mentioned = sender; // El que acepta es el "mentioned" del paso anterior
+    const proposer = global.proposals[mentioned];
 
-    if (!proposer) return await sock.sendMessage(from, { text: '《✧》 No tienes propuestas de matrimonio pendientes o ya expiró.' }, { quoted: m });
+    if (!proposer) return reply('《✧》 No tienes ninguna propuesta pendiente, pariente.');
 
     try {
-        // 1. Buscamos a ambos en MongoDB
+        // 1. Buscamos a ambos en la DB
         let userProposer = await User.findOne({ jid: proposer });
-        let userProposee = await User.findOne({ jid: proposee });
+        let userMentioned = await User.findOne({ jid: mentioned });
 
-        // 2. Si por algo no existen, los creamos rápido
-        if (!userProposer) userProposer = new User({ jid: proposer, name: 'Usuario' });
-        if (!userProposee) userProposee = new User({ jid: proposee, name: 'Usuario' });
+        // 2. Casamos a los dos (Guardamos JID y Nombre)
+        await User.updateOne({ jid: proposer }, { 
+            $set: { marry: mentioned, marryName: userMentioned?.name || 'Alguien especial' } 
+        });
+        await User.updateOne({ jid: mentioned }, { 
+            $set: { marry: proposer, marryName: userProposer?.name || 'Alguien especial' } 
+        });
 
-        // 3. Guardamos el vínculo (El ID del uno en el otro)
-        userProposer.marry = proposee;
-        userProposee.marry = proposer;
+        // 3. Limpiamos la propuesta temporal
+        delete global.proposals[mentioned];
 
-        // 4. ¡A la nube! Guardamos los cambios
-        await userProposer.save();
-        await userProposee.save();
-        
-        // Borramos la propuesta de la memoria temporal (RAM)
-        delete global.proposals[proposee]; 
-
+        // 4. Mensaje de celebración
         await sock.sendMessage(from, { 
-            text: `💍 ¡Felicidades! @${proposer.split('@')[0]} y @${proposee.split('@')[0]} ahora están casados legalmente. ✨\n\n> El matrimonio ha sido registrado en la base de datos eterna.`,
-            mentions: [proposer, proposee]
+            text: `🎊 ¡VIVAN LOS NOVIOS! 🎊\n\n@${proposer.split('@')[0]} y @${mentioned.split('@')[0]} se han casado oficialmente.\n\n> Ya pueden ver su estado civil en su .perfil`,
+            mentions: [proposer, mentioned]
         }, { quoted: m });
 
     } catch (e) {
-        console.error("Error al casar en Mongo:", e);
-        await sock.sendMessage(from, { text: '❌ Hubo un error al guardar el matrimonio en MongoDB.' }, { quoted: m });
+        console.error(e);
+        reply('❌ Hubo un error al registrar el matrimonio.');
     }
 }
 break;
