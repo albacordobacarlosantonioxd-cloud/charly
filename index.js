@@ -1818,13 +1818,12 @@ break;
 
 
 case 'menu': {
-                const imagenMenu = 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png'; 
-                const linkCanal = 'https://whatsapp.com/channel/0029VbBweWy0gcfSQ572kD31'; 
+    const imagenMenu = 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png'; 
+    const linkCanal = 'https://whatsapp.com/channel/0029VbBweWy0gcfSQ572kD31'; 
 
-                try {
-                    await sock.sendMessage(from, { 
-                        image: { url: imagenMenu }, 
-                        caption: `Hola! Soy *CHARLY-BOT* (V2)
+    try {
+        await sock.sendMessage(from, { 
+            text: `Hola! Soy *CHARLY-BOT* (V2)
 AQUÍ TIENES LA LISTA DE COMANDOS
 
 《✧》 *COMUNIDAD* 《✧》
@@ -1886,27 +1885,27 @@ AQUÍ TIENES LA LISTA DE COMANDOS
 ┗━━━━━━━━━━━━━━━━━━━━┛
 
 📢 *CANAL:* ${linkCanal}`,
-                        contextInfo: {
-                            forwardingScore: 999,
-                            isForwarded: true, 
-                            externalAdReply: {
-                                title: 'CHARLY-BOT V2 ⚡', 
-                                body: 'Bot Maestro | Clan HOT ON', 
-                                thumbnailUrl: imagenMenu,
-                                sourceUrl: linkCanal,
-                                mediaType: 1,
-                                renderLargerThumbnail: true, 
-                                showAdAttribution: true
-                            }
-                        }
-                    }, { quoted: m });
-
-                } catch (e) {
-                    console.error("Error en el menú:", e);
-                    sock.sendMessage(from, { text: "❌ Error al generar el menú." }, { quoted: m });
+            contextInfo: {
+                forwardingScore: 999,
+                isForwarded: true,
+                externalAdReply: {
+                    title: 'CHARLY-BOT V2 ⚡',
+                    body: 'Bot Maestro | Clan HOT ON',
+                    thumbnailUrl: imagenMenu,
+                    sourceUrl: linkCanal,
+                    mediaType: 1,
+                    renderLargerThumbnail: true, 
+                    showAdAttribution: true
                 }
             }
-            break;
+        }, { quoted: m });
+
+    } catch (e) {
+        console.error("Error en el menú:", e);
+        sock.sendMessage(from, { text: "❌ Error al generar el menú." }, { quoted: m });
+    }
+}
+break;
 
 case 'v': case 'ai': {
     if (!text) return sock.sendMessage(from, { text: '¿Qué quieres que diga, pariente?' });
