@@ -75,7 +75,7 @@ const fetch = require('node-fetch');
 const { getTracks } = require('spotify-url-info')(fetch);
 const qrcode = require('qrcode-terminal');
 const PDFDocument = require('pdfkit');
-
+const FormData = require('form-data');
 
 
 // --- CHEQUEO DE HERRAMIENTAS ---
@@ -489,7 +489,14 @@ function calcularProgreso(nivel, expActual) {
 
 //////////////
 
-
+async function uploadToTelegraph(buffer) {
+    const form = new FormData();
+    form.append('file', buffer, 'tmp.png');
+    const res = await axios.post('https://telegra.ph/upload', form, {
+        headers: form.getHeaders()
+    });
+    return 'https://telegra.ph' + res.data[0].src;
+}
 
 
 /////////////
@@ -1593,77 +1600,44 @@ case 'flux': {
 break;
 ///////
 
-case 'hd': case 'remini': case 'enhance': {
-    const axios = require('axios');
-    const FormData = require('form-data');
-    
-    // --- 1. DETECCIÓN ULTRA-SEGURA DE LA IMAGEN ---
-    // Buscamos el mime type en:
-    // a) El mensaje actual (m.mimetype)
-    // b) Un mensaje citado (m.quoted?.mimetype)
-    // c) Un mensaje de imagen directo (m.msg?.mimetype)
-    const mime = m.mimetype || m.quoted?.mimetype || m.msg?.mimetype || '';
-    
-    // Si no hay mime type de imagen, mandamos el error
-    if (!mime || !/image\/(jpe?g|png|webp)/.test(mime)) {
-        return await sock.sendMessage(from, { 
-            text: `《✧》 Por favor, *responde* a una imagen o *mándala* con el comando *${prefix + command}*.` 
-        }, { quoted: m });
-    }
+case 'hd': {
+    // Verificamos si hay una imagen
+    const isQuotedImage = m.quoted ? (m.quoted.mtype === 'imageMessage') : false;
+    const isImage = m.mtype === 'imageMessage';
 
-    // --- 2. INICIAR PROCESO DE MEJORA ---
-    await sock.sendMessage(from, { text: '`⏳ Mejorando calidad... esto puede tardar unos segundos.`' }, { quoted: m });
+    if (!isImage && !isQuotedImage) return socket.sendMessage(from, { text: '❌ Responde a una imagen o envía una con .hd' }, { quoted: m });
+
+    await socket.sendMessage(from, { text: '⏳ *Procesando HD para el clan HOT ON...*' }, { quoted: m });
 
     try {
-        // 3. Descargar la imagen del mensaje correcto (actual o citado)
-        const q = m.quoted || m;
-        const buffer = await q.download();
+        // 1. Descargar la imagen de WhatsApp
+        const downloadTarget = isQuotedImage ? m.quoted : m;
+        const stream = await downloadContentFromMessage(downloadTarget.message.imageMessage, 'image');
+        let buffer = Buffer.from([]);
+        for await (const chunk of stream) {
+            buffer = Buffer.concat([buffer, chunk]);
+        }
 
-        if (!buffer || buffer.length < 10) throw new Error('No se pudo descargar la imagen.');
+        // 2. Convertir imagen a Link (URL)
+        const imageUrl = await uploadToTelegraph(buffer);
 
-        // 4. Subir a un hosting temporal (Catbox)
-        // La API de Catbox es muy estable para esto
-        const uploadUrl = 'https://catbox.moe/user/api.php';
-        
-        // Catbox prefiere que le mandes el buffer directamente en un form
-        const bodyForm = new FormData();
-        bodyForm.append('reqtype', 'fileupload');
-        bodyForm.append('fileToUpload', buffer, { filename: 'image.jpg' });
-        
-        const uploadRes = await axios.post(uploadUrl, bodyForm, {
-            headers: { ...bodyForm.getHeaders() }
-        }).catch(() => null);
+        // 3. Llamar a tu API con tu Key
+        const apiKey = "sylphy-ty5xtWm";
+        const apiUrl = `https://sylphy.xyz/tools/upscale?url=${imageUrl}&scale=2&api_key=${apiKey}`;
 
-        // Verificamos que Catbox nos devuelva una URL válida (empieza con https://)
-        const imageUrl = typeof uploadRes?.data === 'string' && uploadRes.data.startsWith('https://') ? uploadRes.data : null;
-        
-        if (!imageUrl) throw new Error('No se pudo generar la URL temporal de la imagen.');
-
-        // 5. Llamada a la API de Sylphy (HD)
-        // Scale 2 es el estándar para duplicar la resolución
-        const apiKey = 'sylphy-ty5xtWm';
-        const apiUrl = `https://sylphy.xyz/tools/upscale?url=${encodeURIComponent(imageUrl)}&scale=2&api_key=${apiKey}`;
-        
-        console.log("Generando HD desde URL:", imageUrl); // Depuración
-
-        const response = await axios.get(apiUrl, { responseType: 'arraybuffer', timeout: 60000 }); // 60s timeout
-
-        if (!response.data || response.data.length < 100) throw new Error('La API de HD no devolvió una imagen válida.');
-
-        // 6. Enviar el resultado final
-        await sock.sendMessage(from, { 
-            image: Buffer.from(response.data), 
-            caption: '`✅ ¡Imagen mejorada con éxito!`' 
+        // 4. Enviar el resultado
+        await socket.sendMessage(from, { 
+            image: { url: apiUrl }, 
+            caption: '✅ *Imagen mejorada con éxito*' 
         }, { quoted: m });
 
-    } catch (e) {
-        console.error("Error detallado en HD:", e.message);
-        await sock.sendMessage(from, { 
-            text: `> ❌ Error: No se pudo procesar la imagen.\n> [Detalle: *${e.message}*]` 
-        }, { quoted: m });
+    } catch (err) {
+        console.error(err);
+        socket.sendMessage(from, { text: '❌ Hubo un fallo con la API o la imagen.' }, { quoted: m });
     }
 }
 break;
+
 ///////////
 
  case 'imagine': case 'generar': {
