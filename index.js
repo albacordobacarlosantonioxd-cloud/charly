@@ -1601,43 +1601,41 @@ break;
 ///////
 
 case 'hd': {
-    // 1. Detectar correctamente si es imagen o respuesta a imagen
-    const isQuotedImage = m.quoted ? (m.quoted.mtype === 'imageMessage') : false;
-    const isImage = m.mtype === 'imageMessage';
+    // 1. Detectar si es imagen o respuesta a una imagen
+    const isQuotedImage = m.message.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
+    const isImage = m.message.imageMessage;
 
-    if (!isImage && !isQuotedImage) return socket.sendMessage(from, { text: '❌ Responde a una imagen o envía una con .hd' }, { quoted: m });
+    if (!isImage && !isQuotedImage) return sock.sendMessage(from, { text: '❌ Responde a una imagen o envía una con .hd' }, { quoted: m });
 
-    await socket.sendMessage(from, { text: '⏳ *Procesando HD para el clan HOT ON...*' }, { quoted: m });
+    await sock.sendMessage(from, { text: '⏳ *Procesando HD para el clan HOT ON...*' }, { quoted: m });
 
     try {
-        // CORRECCIÓN 1: Obtener el mensaje correcto para descargar
-        // Si es citado, el mensaje real está en m.quoted.message
-        const quota = m.quoted ? m.quoted.message.imageMessage : m.message.imageMessage;
-
-        // 2. Descargar la imagen de WhatsApp
+        // 2. Descargar la imagen
+        // Usamos el mensaje citado si existe, si no, el mensaje actual
+        const quota = isQuotedImage ? m.message.extendedTextMessage.contextInfo.quotedMessage.imageMessage : m.message.imageMessage;
+        
         const stream = await downloadContentFromMessage(quota, 'image');
         let buffer = Buffer.from([]);
         for await (const chunk of stream) {
             buffer = Buffer.concat([buffer, chunk]);
         }
 
-        // 3. Convertir imagen a Link (Asegúrate de tener la función uploadToTelegraph arriba)
+        // 3. Subir a internet (Asegúrate de tener la función uploadToTelegraph que te pasé antes)
         const imageUrl = await uploadToTelegraph(buffer);
 
-        // 4. Llamar a tu API
+        // 4. Tu API
         const apiKey = "sylphy-ty5xtWm";
         const apiUrl = `https://sylphy.xyz/tools/upscale?url=${imageUrl}&scale=2&api_key=${apiKey}`;
 
-        // 5. Enviar el resultado
-        // CORRECCIÓN 2: Usar { url: apiUrl } es correcto si la API devuelve la imagen directa
-        await socket.sendMessage(from, { 
+        // 5. Enviar el resultado usando 'sock'
+        await sock.sendMessage(from, { 
             image: { url: apiUrl }, 
-            caption: '✅ *Imagen mejorada con éxito para el clan HOT ON*' 
+            caption: '✅ *Imagen mejorada con éxito*' 
         }, { quoted: m });
 
     } catch (err) {
         console.error("ERROR EN HD:", err);
-        socket.sendMessage(from, { text: `❌ Error: ${err.message}` }, { quoted: m });
+        sock.sendMessage(from, { text: '❌ Error: ' + err.message }, { quoted: m });
     }
 }
 break;
