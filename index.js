@@ -490,13 +490,24 @@ function calcularProgreso(nivel, expActual) {
 
 //////////////
 
-async function uploadToTelegraph(buffer) {
-    const form = new FormData();
-    form.append('file', buffer, 'tmp.png');
-    const res = await axios.post('https://telegra.ph/upload', form, {
-        headers: form.getHeaders()
-    });
-    return 'https://telegra.ph' + res.data[0].src;
+async function uploadImage(buffer) {
+    try {
+        const { fileTypeFromBuffer } = await import('file-type'); // Para detectar el formato real
+        const type = await fileTypeFromBuffer(buffer);
+        const ext = type ? type.ext : 'png';
+        
+        const bodyForm = new FormData();
+        bodyForm.append('fileToUpload', buffer, `file.${ext}`);
+        bodyForm.append('reqtype', 'fileupload');
+
+        const res = await axios.post('https://catbox.moe/user/api.php', bodyForm, {
+            headers: bodyForm.getHeaders()
+        });
+        
+        return res.data; // Esto nos devuelve el link directo
+    } catch (err) {
+        throw new Error('Error al subir imagen a Catbox');
+    }
 }
 
 
