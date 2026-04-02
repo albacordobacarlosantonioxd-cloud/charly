@@ -1818,29 +1818,18 @@ break;
 
 
 case 'menu': {
-    const imagenMenu = 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png'; 
-    const linkCanal = 'https://whatsapp.com/channel/0029VbBweWy0gcfSQ572kD31'; 
-    
-    try {
-        // 1. Enviamos la imagen con el adReply del canal
-        await sock.sendMessage(from, { 
-            image: { url: imagenMenu },
-            contextInfo: {
-                externalAdReply: {
-                    title: '⚡ CHARLY-BOT V2 ⚡',
-                    body: 'Click para unirte al Canal Oficial',
-                    thumbnailUrl: imagenMenu,
-                    sourceUrl: linkCanal,
-                    mediaType: 1,
-                    renderLargerThumbnail: false
-                }
-            }
-        }, { quoted: m });
+                const imagenMenu = 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png'; 
+                const linkCanal = 'https://whatsapp.com/channel/0029VbBweWy0gcfSQ572kD31'; 
 
-        // 2. Enviamos el texto gigante con todo separado por renglón
-        await sock.sendMessage(from, { text: `╔════《 ✧ CHARLY-BOT ✧ 》════╗
-     ✨ *BOT MAESTRO V2* ✨     
-╚════════════════════════╝
+                try {
+                    await sock.sendMessage(from, { 
+                        image: { url: imagenMenu }, 
+                        caption: `Hola! Soy *CHARLY-BOT* (V2)
+AQUÍ TIENES LA LISTA DE COMANDOS
+
+《✧》 *COMUNIDAD* 《✧》
+◈ .canal
+◈ .grupo
 
 《✧》 *INTELIGENCIA ARTIFICIAL* 《✧》
 ◈ .ai
@@ -1893,17 +1882,31 @@ case 'menu': {
 ◈ .reload
 
 ┏━━━━━━━━━━━━━━━━━━━━┓
-   《✧》 *By Charly-Bot* 《✧》 
+   《✧》 *By Charly-Bot | HOT ON* 《✧》 
 ┗━━━━━━━━━━━━━━━━━━━━┛
 
-📢 *Canal:* ${linkCanal}` });
+📢 *CANAL:* ${linkCanal}`,
+                        contextInfo: {
+                            forwardingScore: 999,
+                            isForwarded: true, 
+                            externalAdReply: {
+                                title: 'CHARLY-BOT V2 ⚡', 
+                                body: 'Bot Maestro | Clan HOT ON', 
+                                thumbnailUrl: imagenMenu,
+                                sourceUrl: linkCanal,
+                                mediaType: 1,
+                                renderLargerThumbnail: true, 
+                                showAdAttribution: true
+                            }
+                        }
+                    }, { quoted: m });
 
-    } catch (e) {
-        console.error("Error en el menú:", e);
-        sock.sendMessage(from, { text: "❌ Error al generar el menú." }, { quoted: m });
-    }
-}
-break;
+                } catch (e) {
+                    console.error("Error en el menú:", e);
+                    sock.sendMessage(from, { text: "❌ Error al generar el menú." }, { quoted: m });
+                }
+            }
+            break;
 
 case 'v': case 'ai': {
     if (!text) return sock.sendMessage(from, { text: '¿Qué quieres que diga, pariente?' });
