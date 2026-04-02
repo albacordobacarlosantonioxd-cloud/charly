@@ -1635,20 +1635,36 @@ case 'hd': {
         const apiKey = "sylphy-ty5xtWm";
         const apiUrl = `https://sylphy.xyz/tools/upscale?url=${imageUrl}&scale=2&api_key=${apiKey}`;
 
-        // 4. DESCARGAR EL RESULTADO (Para evitar el error 504 de Baileys)
-        const response = await axios.get(apiUrl, { responseType: 'arraybuffer', timeout: 60000 }); // 60 segundos de espera
+        // 4. DESCARGAR EL RESULTADO CON VALIDACIÓN
+        const response = await axios.get(apiUrl, { 
+            responseType: 'arraybuffer', 
+            timeout: 90000 // Le damos 90 segundos (más tiempo)
+        });
+
+        // REVISIÓN DE SEGURIDAD: ¿Es realmente una imagen?
+        const contentType = response.headers['content-type'];
+        if (!contentType || !contentType.includes('image')) {
+            throw new Error('La API no devolvió una imagen válida, intentelo de nuevo.');
+        }
+
         const finalBuffer = Buffer.from(response.data, 'binary');
 
-        // 5. Enviar el buffer directamente
+        // 5. ENVIAR COMO IMAGEN (Aseguramos el formato)
         await sock.sendMessage(from, { 
             image: finalBuffer, 
-            caption: '✅ *¡Listo! Imagen mejorada con éxito.*' 
+            caption: '✅ *¡Listo! Imagen mejorada para el clan HOT ON.*',
+            mimetype: 'image/jpeg' // Forzamos a que WhatsApp sepa que es foto
         }, { quoted: m });
 
     } catch (err) {
         console.error("ERROR EN HD:", err);
-        const msgError = err.response?.status === 504 ? 'La API tardó mucho tiempo. Intenta con una imagen más pequeña.' : 'Error: ' + err.message;
-        sock.sendMessage(from, { text: '❌ ' + msgError }, { quoted: m });
+        let mensajeUser = '❌ Hubo un fallo al procesar la imagen.';
+        
+        if (err.code === 'ECONNABORTED') mensajeUser = '❌ La API tardó demasiado tiempo (90s).';
+        else if (err.response?.status === 504) mensajeUser = '❌ El servidor de la API está saturado hoy.';
+        else if (err.message) mensajeUser = `❌ ${err.message}`;
+        
+        sock.sendMessage(from, { text: mensajeUser }, { quoted: m });
     }
 }
 break;
