@@ -1818,80 +1818,90 @@ break;
 
 
 case 'menu': {
-    // URL de la imagen de Meliodas que generamos
     const imagenMenu = 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png'; 
-    const linkCanal = 'https://whatsapp.com/channel/0029VbBweWy0gcfSQ572kD31'; // <--- PEGA AQUÍ EL LINK DE TU CANAL
-
-    await sock.sendMessage(from, { 
-        image: { url: imagenMenu }, 
-        caption: `╭───『 *BOT MAESTRO* 』───╮
-│
-│ 🧠 *IA & VOZ*
-│ ❯ .ai
-│ ❯ .v
-│ ❯ .cop 
-│ ❯ .copilot
-│ ❯ .letra 
-│ ❯ .lyrics
-│ ❯ .gemini
-│ ❯ .ia
-│ ❯ .llama
-│
-│ 📥 *DESCARGAS*
-│ ❯ .audio 
-│ ❯ .video 
-│ ❯ .album
-│ ❯ .tt 
-│ ❯ .playlist
-│ ❯ .ytaudio
-│ ❯ .ytvideo
-│
-│ 🎭 *DIVERSIÓN*
-│ ❯ .kiss 
-│ ❯ .slap 
-│ ❯ .hug
-│ ❯ .kill
-│ ❯ .nsfwmenu
-│ ❯ .translate 
-│ ❯ .brat
-│
-│ 🛡️ *ADMIN*
-│ ❯ .tag 
-│ ❯ .kick
-│ ❯ .add 
-│ ❯ .del
-│ ❯ .promote 
-│ ❯ .demote
-│ ❯ .open 
-│ ❯ .close
-│ ❯ .antilink on/off
-│
-│ 💰 *ECONOMÍA*
-│ ❯ .profile 
-│ ❯ .menuperfil
-│ ❯ .work 
-│ ❯ .rob
-│
-│ ⚙️ *SISTEMA*
-│ ❯ .s
-│ ❯ .p
-│ ❯ .reload
-│
-╰───『 *By Charly-Bot* 』───╯
-
-📢 *¡Únete a nuestro canal oficial!*
-${linkCanal}`,
-        contextInfo: {
-            externalAdReply: {
-                title: 'CHARTY-BOT NEWS 📢',
-                body: '¡Únete para actualizaciones y más!',
-                thumbnailUrl: imagenMenu,
-                sourceUrl: linkCanal,
-                mediaType: 1,
-                renderLargerThumbnail: false
+    const linkCanal = 'https://whatsapp.com/channel/0029VbBweWy0gcfSQ572kD31'; 
+    
+    try {
+        // 1. Enviamos la imagen con el adReply del canal
+        await sock.sendMessage(from, { 
+            image: { url: imagenMenu },
+            contextInfo: {
+                externalAdReply: {
+                    title: '⚡ CHARLY-BOT V2 ⚡',
+                    body: 'Click para unirte al Canal Oficial',
+                    thumbnailUrl: imagenMenu,
+                    sourceUrl: linkCanal,
+                    mediaType: 1,
+                    renderLargerThumbnail: false
+                }
             }
-        }
-    }, { quoted: m });
+        }, { quoted: m });
+
+        // 2. Enviamos el texto gigante con todo separado por renglón
+        await sock.sendMessage(from, { text: `╔════《 ✧ CHARLY-BOT ✧ 》════╗
+     ✨ *BOT MAESTRO V2* ✨     
+╚════════════════════════╝
+
+《✧》 *INTELIGENCIA ARTIFICIAL* 《✧》
+◈ .ai
+◈ .v
+◈ .copilot
+◈ .ia
+◈ .gemini
+◈ .llama
+◈ .brat
+◈ .letra
+◈ .lyrics
+
+《✧》 *MULTIMEDIA & DOWNLOAD* 《✧》
+◈ .audio
+◈ .video
+◈ .album
+◈ .tt
+◈ .playlist
+◈ .ytaudio
+◈ .ytvideo
+
+《✧》 *ENTRETENIMIENTO* 《✧》
+◈ .kiss
+◈ .slap
+◈ .hug
+◈ .kill
+◈ .translate
+◈ .nsfwmenu
+
+《✧》 *ADMINISTRACIÓN* 《✧》
+◈ .tag
+◈ .kick
+◈ .add
+◈ .del
+◈ .promote
+◈ .demote
+◈ .open
+◈ .close
+◈ .antilink on/off
+
+《✧》 *ECONOMÍA & PERFIL* 《✧》
+◈ .profile
+◈ .menuperfil
+◈ .work
+◈ .rob
+
+《✧》 *SISTEMA & CONFIG* 《✧》
+◈ .s
+◈ .p
+◈ .reload
+
+┏━━━━━━━━━━━━━━━━━━━━┓
+   《✧》 *By Charly-Bot* 《✧》 
+┗━━━━━━━━━━━━━━━━━━━━┛
+
+📢 *Canal:* ${linkCanal}` });
+
+    } catch (e) {
+        console.error("Error en el menú:", e);
+        sock.sendMessage(from, { text: "❌ Error al generar el menú." }, { quoted: m });
+    }
 }
 break;
 
