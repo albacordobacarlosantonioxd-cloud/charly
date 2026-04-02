@@ -1628,33 +1628,30 @@ case 'hd': {
             buffer = Buffer.concat([buffer, chunk]);
         }
 
-        // 2. Subir a Catbox
+        // 2. Subir a Catbox (Tu uploader actual)
         const imageUrl = await uploadImage(buffer); 
 
-        // 3. API URL
+        // 3. Configuración de la API (Endpoint de Unblur según tus capturas)
         const apiKey = "sylphy-ty5xtWm";
-        const apiUrl = `https://sylphy.xyz/tools/upscale?url=${imageUrl}&scale=2&api_key=${apiKey}`;
+        const apiUrl = `https://sylphy.xyz/tools/unblur?url=${encodeURIComponent(imageUrl)}&api_key=${apiKey}`;
 
-        // 4. DESCARGAR EL RESULTADO CON VALIDACIÓN
-        const response = await axios.get(apiUrl, { 
-            responseType: 'arraybuffer', 
-            timeout: 90000 // Le damos 90 segundos (más tiempo)
-        });
+        // 4. PETICIÓN A LA API (Obtenemos el JSON de respuesta)
+        const response = await axios.get(apiUrl, { timeout: 90000 });
+        const res = response.data;
 
-        // REVISIÓN DE SEGURIDAD: ¿Es realmente una imagen?
-        const contentType = response.headers['content-type'];
-        if (!contentType || !contentType.includes('image')) {
-            throw new Error('La API no devolvió una imagen válida, intentelo de nuevo.');
+        // 5. VALIDACIÓN Y ENVÍO DEL RESULTADO
+        // Según tu captura, la respuesta es: { status: true, result: { output: "URL_DE_LA_IMAGEN" } }
+        if (res.status && res.result && res.result.output) {
+            const finalImageUrl = res.result.output;
+
+            await sock.sendMessage(from, { 
+                image: { url: finalImageUrl }, 
+                caption: '✅ *¡Listo! Imagen mejorada para el clan HOT ON.*',
+                mimetype: 'image/jpeg' 
+            }, { quoted: m });
+        } else {
+            throw new Error('La API no devolvió un resultado válido. Inténtalo de nuevo.');
         }
-
-        const finalBuffer = Buffer.from(response.data, 'binary');
-
-        // 5. ENVIAR COMO IMAGEN (Aseguramos el formato)
-        await sock.sendMessage(from, { 
-            image: finalBuffer, 
-            caption: '✅ *¡Listo! Imagen mejorada para el clan HOT ON.*',
-            mimetype: 'image/jpeg' // Forzamos a que WhatsApp sepa que es foto
-        }, { quoted: m });
 
     } catch (err) {
         console.error("ERROR EN HD:", err);
