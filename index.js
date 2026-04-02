@@ -1618,7 +1618,7 @@ case 'hd': {
 
         if (!isImage && !isQuotedImage) return sock.sendMessage(from, { text: '❌ Responde a una imagen para mejorarla.' }, { quoted: m });
 
-        await sock.sendMessage(from, { text: '⏳ *Mejorando calidad para Ti... esto puede tardar un poco.*' }, { quoted: m });
+        await sock.sendMessage(from, { text: '⏳ *Mejorando calidad.*' }, { quoted: m });
 
         // 1. Descargar imagen de WhatsApp
         const messageToDownload = isQuotedImage ? quoted.imageMessage : m.message.imageMessage;
@@ -1646,7 +1646,7 @@ case 'hd': {
 
             await sock.sendMessage(from, { 
                 image: { url: finalImageUrl }, 
-                caption: '✅ *¡Listo! Imagen mejorada para el clan HOT ON.*',
+                caption: '✅ *¡Listo! Imagen mejorada.*',
                 mimetype: 'image/jpeg' 
             }, { quoted: m });
         } else {
@@ -1817,9 +1817,14 @@ case 'img': {
 break; 
 
 
-////////
-            case 'menu':
-                await sock.sendMessage(from, { text: `╭───『 *BOT MAESTRO* 』───╮
+case 'menu': {
+    // URL de la imagen de Meliodas que generamos
+    const imagenMenu = 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png'; 
+    const linkCanal = 'https://whatsapp.com/channel/0029VbBweWy0gcfSQ572kD31'; // <--- PEGA AQUÍ EL LINK DE TU CANAL
+
+    await sock.sendMessage(from, { 
+        image: { url: imagenMenu }, 
+        caption: `╭───『 *BOT MAESTRO* 』───╮
 │
 │ 🧠 *IA & VOZ*
 │ ❯ .ai
@@ -1830,12 +1835,12 @@ break;
 │ ❯ .lyrics
 │ ❯ .gemini
 │ ❯ .ia
-│ ❯ llama
+│ ❯ .llama
 │
 │ 📥 *DESCARGAS*
 │ ❯ .audio 
 │ ❯ .video 
-│ ❯.album
+│ ❯ .album
 │ ❯ .tt 
 │ ❯ .playlist
 │ ❯ .ytaudio
@@ -1872,8 +1877,23 @@ break;
 │ ❯ .p
 │ ❯ .reload
 │
-╰───『 *By Charly-Bot* 』───╯` });
-                break;
+╰───『 *By Charly-Bot* 』───╯
+
+📢 *¡Únete a nuestro canal oficial!*
+${linkCanal}`,
+        contextInfo: {
+            externalAdReply: {
+                title: 'CHARTY-BOT NEWS 📢',
+                body: '¡Únete para actualizaciones y más!',
+                thumbnailUrl: imagenMenu,
+                sourceUrl: linkCanal,
+                mediaType: 1,
+                renderLargerThumbnail: false
+            }
+        }
+    }, { quoted: m });
+}
+break;
 
 case 'v': case 'ai': {
     if (!text) return sock.sendMessage(from, { text: '¿Qué quieres que diga, pariente?' });
