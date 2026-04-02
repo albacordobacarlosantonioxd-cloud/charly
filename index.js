@@ -1618,7 +1618,7 @@ case 'hd': {
 
         if (!isImage && !isQuotedImage) return sock.sendMessage(from, { text: '❌ Responde a una imagen para mejorarla.' }, { quoted: m });
 
-        await sock.sendMessage(from, { text: '⏳ *Mejorando calidad para el clan HOT ON... esto puede tardar un poco.*' }, { quoted: m });
+        await sock.sendMessage(from, { text: '⏳ *Mejorando calidad para Ti... esto puede tardar un poco.*' }, { quoted: m });
 
         // 1. Descargar imagen de WhatsApp
         const messageToDownload = isQuotedImage ? quoted.imageMessage : m.message.imageMessage;
