@@ -131,7 +131,8 @@ const UserSchema = new mongoose.Schema({
     
     // Niveles
     level: { type: Number, default: 1 },
-    exp: { type: Number, default: 0 }
+    exp: { type: Number, default: 0 },
+    history: { type: Array, default: [] }
 });
 // Solo una vez declaramos el modelo User
 const User = mongoose.model('User', UserSchema);
@@ -1610,44 +1611,47 @@ break;
 ///////
 
 case 'hd': {
-            try {
-                // 1. Detectar si el mensaje es una imagen o responde a una
-                const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
-                const isImage = m.message.imageMessage;
-                const isQuotedImage = quoted?.imageMessage;
+    try {
+        const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
+        const isImage = m.message.imageMessage;
+        const isQuotedImage = quoted?.imageMessage;
 
-                if (!isImage && !isQuotedImage) return sock.sendMessage(from, { text: '❌ Responde a una imagen para mejorarla.' }, { quoted: m });
+        if (!isImage && !isQuotedImage) return sock.sendMessage(from, { text: '❌ Responde a una imagen para mejorarla.' }, { quoted: m });
 
-                await sock.sendMessage(from, { text: '⏳ *Mejorando calidad para el clan HOT ON...*' }, { quoted: m });
+        await sock.sendMessage(from, { text: '⏳ *Mejorando calidad para el clan HOT ON... esto puede tardar un poco.*' }, { quoted: m });
 
-                // 2. Descargar la imagen de WhatsApp
-                const messageToDownload = isQuotedImage ? quoted.imageMessage : m.message.imageMessage;
-                const stream = await downloadContentFromMessage(messageToDownload, 'image');
-                let buffer = Buffer.from([]);
-                for await (const chunk of stream) {
-                    buffer = Buffer.concat([buffer, chunk]);
-                }
-
-                // 3. Subir a Catbox (usando la función que acabas de poner arriba)
-                const imageUrl = await uploadImage(buffer); 
-
-                // 4. Llamar a la API de Upscale
-                const apiKey = "sylphy-ty5xtWm";
-                const apiUrl = `https://sylphy.xyz/tools/upscale?url=${imageUrl}&scale=2&api_key=${apiKey}`;
-
-                // 5. Enviar el resultado al chat
-                await sock.sendMessage(from, { 
-                    image: { url: apiUrl }, 
-                    caption: '✅ *¡Listo! Imagen en HD para el clan.*' 
-                }, { quoted: m });
-
-            } catch (err) {
-                console.error("ERROR EN HD:", err);
-                sock.sendMessage(from, { text: '❌ Error: ' + err.message }, { quoted: m });
-            }
+        // 1. Descargar imagen de WhatsApp
+        const messageToDownload = isQuotedImage ? quoted.imageMessage : m.message.imageMessage;
+        const stream = await downloadContentFromMessage(messageToDownload, 'image');
+        let buffer = Buffer.from([]);
+        for await (const chunk of stream) {
+            buffer = Buffer.concat([buffer, chunk]);
         }
-        break;
 
+        // 2. Subir a Catbox
+        const imageUrl = await uploadImage(buffer); 
+
+        // 3. API URL
+        const apiKey = "sylphy-ty5xtWm";
+        const apiUrl = `https://sylphy.xyz/tools/upscale?url=${imageUrl}&scale=2&api_key=${apiKey}`;
+
+        // 4. DESCARGAR EL RESULTADO (Para evitar el error 504 de Baileys)
+        const response = await axios.get(apiUrl, { responseType: 'arraybuffer', timeout: 60000 }); // 60 segundos de espera
+        const finalBuffer = Buffer.from(response.data, 'binary');
+
+        // 5. Enviar el buffer directamente
+        await sock.sendMessage(from, { 
+            image: finalBuffer, 
+            caption: '✅ *¡Listo! Imagen mejorada con éxito.*' 
+        }, { quoted: m });
+
+    } catch (err) {
+        console.error("ERROR EN HD:", err);
+        const msgError = err.response?.status === 504 ? 'La API tardó mucho tiempo. Intenta con una imagen más pequeña.' : 'Error: ' + err.message;
+        sock.sendMessage(from, { text: '❌ ' + msgError }, { quoted: m });
+    }
+}
+break;
 
 
 ///////////
@@ -1695,63 +1699,62 @@ case 'ia': case 'llama': case 'chatgpt': {
 
     try {
         const Groq = require("groq-sdk");
-        const groq = new Groq({ apiKey: "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" }); // Usa la nueva que generaste
+        const groq = new Groq({ apiKey: "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" });
 
-        // 1. Buscamos al usuario en la DB usando el modelo User que creamos
+        // 1. Buscamos al usuario en MongoDB Atlas
         let user = await User.findOne({ jid: sender });
         
-        // Si no existe, lo creamos de una vez
+        // Si no existe, lo creamos con historial vacío
         if (!user) {
             user = await User.create({ jid: sender, name: m.pushName || 'Usuario', history: [] });
         }
 
-        // 2. Preparamos los mensajes (System + Historial + Pregunta Actual)
+        // 2. Preparamos los mensajes para la IA
         let messages = [
             { 
                 role: "system", 
-                content: `Eres un bot de WhatsApp divertido y servicial. Hablas como un compa de México (usa jerga como "qué onda", "pariente", "arre"). Eres experto en programación, el juego Free Fire y motos Yamaha MT-09. El usuario con el que hablas se llama ${m.pushName || 'pariente'}.` 
+                content: `Eres un bot de WhatsApp divertido y servicial. Hablas como un compa de México (usa jerga como "qué onda", "pariente", "arre"). Eres experto en programación, el juego Free Fire y motos Yamaha MT-09. El usuario se llama ${m.pushName || 'pariente'}.` 
             }
         ];
 
-        // Añadimos el historial que ya teníamos guardado
+        // Añadimos el historial guardado en Mongo (si existe)
         if (user.history && user.history.length > 0) {
-            user.history.forEach(msg => messages.push(msg));
+            messages.push(...user.history);
         }
 
-        // Añadimos la pregunta que acaba de hacer el usuario
+        // Añadimos la pregunta actual
         messages.push({ role: "user", content: text });
 
-        // 3. Llamada a la API de Groq (Llama 3.3 70B)
+        // 3. Llamada a Groq
         const chatCompletion = await groq.chat.completions.create({
             messages: messages,
             model: "llama-3.3-70b-versatile",
             temperature: 0.7,
-            max_tokens: 1024,
-            stream: false
+            max_tokens: 1024
         });
 
         const respuestaIA = chatCompletion.choices[0]?.message?.content || "No supe qué decirte, compa.";
 
-        // 4. Actualizamos la memoria en la DB
-        // Guardamos este par de mensajes (pregunta y respuesta)
+        // 4. ACTUALIZACIÓN DE MEMORIA EN MONGO
+        // Guardamos la interacción
         user.history.push({ role: "user", content: text });
         user.history.push({ role: "assistant", content: respuestaIA });
 
-        // Si el historial es muy largo (más de 10 mensajes), borramos los más viejos
-        // Esto ayuda a tus 4GB de RAM y a no gastar tokens de más
-        while (user.history.length > 10) {
-            user.history.shift();
+        // Mantenemos el historial corto (máximo 10 mensajes) para no saturar la DB
+        if (user.history.length > 10) {
+            user.history = user.history.slice(-10);
         }
 
-        // Guardamos los cambios en MongoDB Atlas
+        // IMPORTANTE: Avisar a Mongoose que el array cambió y guardar
+        user.markModified('history'); 
         await user.save();
 
-        // 5. Enviamos la respuesta a WhatsApp
+        // 5. Respuesta a WhatsApp
         await sock.sendMessage(from, { text: respuestaIA }, { quoted: m });
 
     } catch (err) {
         console.error("Error en el comando IA:", err);
-        await sock.sendMessage(from, { text: '❌ Valio barriga, la IA se trabó. Intenta de nuevo en un rato.' }, { quoted: m });
+        await sock.sendMessage(from, { text: '❌ Valio barriga, la IA se trabó. Intenta de nuevo.' }, { quoted: m });
     }
 }
 break;
