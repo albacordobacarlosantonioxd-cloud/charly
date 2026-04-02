@@ -1618,9 +1618,9 @@ case 'hd': {
 
         if (!isImage && !isQuotedImage) return sock.sendMessage(from, { text: '❌ Responde a una imagen para mejorarla.' }, { quoted: m });
 
-        await sock.sendMessage(from, { text: '⏳ *Mejorando calidad... por favor espera.*' }, { quoted: m });
+        await sock.sendMessage(from, { text: '⏳ *Mejorando calidad... (esto puede tardar hasta 2 min)*' }, { quoted: m });
 
-        // 1. Descargar imagen de WhatsApp
+        // 1. Descargar imagen
         const messageToDownload = isQuotedImage ? quoted.imageMessage : m.message.imageMessage;
         const stream = await downloadContentFromMessage(messageToDownload, 'image');
         let buffer = Buffer.from([]);
@@ -1628,45 +1628,47 @@ case 'hd': {
             buffer = Buffer.concat([buffer, chunk]);
         }
 
-        // 2. Subir a Catbox
+        // 2. Subir imagen (Asegúrate que uploadImage funcione bien)
         const imageUrl = await uploadImage(buffer); 
+        console.log("Link de imagen subida:", imageUrl); // Verificamos en consola si subió bien
 
-        // 3. Configuración de la API
+        // 3. Petición a la API con más tiempo de espera
         const apiKey = "sylphy-ty5xtWm";
         const apiUrl = `https://sylphy.xyz/tools/unblur?url=${encodeURIComponent(imageUrl)}&api_key=${apiKey}`;
 
-        // 4. PETICIÓN A LA API
-        const response = await axios.get(apiUrl, { timeout: 100000 }); // Un poco más de tiempo
+        const response = await axios.get(apiUrl, { timeout: 120000 }); // 2 minutos
         const res = response.data;
 
-        // --- LOG PARA DEPURACIÓN ---
-        console.log("RESPUESTA COMPLETA DE LA API:", JSON.stringify(res, null, 2));
+        // LOG DE DEPURACIÓN (Míralo en tu terminal si falla)
+        console.log("RESPUESTA API HD:", res);
 
-        // 5. VALIDACIÓN Y ENVÍO
-        // Intentamos obtener la URL de varias formas por si la API cambió el nombre
-        const finalImageUrl = res.result?.output || res.result || res.url;
+        // 4. Validación robusta
+        let finalUrl = null;
+        if (res.status && res.result) {
+            finalUrl = typeof res.result === 'string' ? res.result : res.result.output;
+        }
 
-        if (finalImageUrl && typeof finalImageUrl === 'string' && finalImageUrl.startsWith('http')) {
+        if (finalUrl && finalUrl.startsWith('http')) {
             await sock.sendMessage(from, { 
-                image: { url: finalImageUrl }, 
-                caption: '✅ *¡Listo! Imagen mejorada con Charly-Bot.*',
+                image: { url: finalUrl }, 
+                caption: '✅ *Calidad mejorada con éxito.*',
                 mimetype: 'image/jpeg' 
             }, { quoted: m });
         } else {
-            // Si llegamos aquí, la API respondió algo pero no la imagen
-            let errorMsg = res.message || 'La API está saturada o el link de imagen falló.';
-            throw new Error(errorMsg);
+            // Si la API responde pero no trae imagen
+            const motivo = res.message || "Servidor saturado o API Key inválida.";
+            throw new Error(motivo);
         }
 
     } catch (err) {
-        console.error("ERROR EN HD:", err);
-        let mensajeUser = '❌ Hubo un fallo al procesar la imagen.';
+        console.error("ERROR CRÍTICO EN HD:", err);
+        let txt = '❌ Error inesperado.';
         
-        if (err.code === 'ECONNABORTED') mensajeUser = '❌ La API tardó demasiado tiempo. Intenta con una imagen más pequeña.';
-        else if (err.response?.status === 504 || err.response?.status === 500) mensajeUser = '❌ El servidor de la API (Sylphy) está caído actualmente.';
-        else if (err.message) mensajeUser = `❌ Error: ${err.message}`;
+        if (err.code === 'ECONNABORTED') txt = '❌ La API tardó demasiado. Intenta con otra foto.';
+        else if (err.response?.status === 404) txt = '❌ El servidor de HD no encontró la imagen.';
+        else if (err.message) txt = `❌ Detalle: ${err.message}`;
         
-        sock.sendMessage(from, { text: mensajeUser }, { quoted: m });
+        sock.sendMessage(from, { text: txt }, { quoted: m });
     }
 }
 break;
@@ -1882,9 +1884,9 @@ case 'menu': {
 ◈ .p
 ◈ .reload
 
-┏━━━━━━━━━━━━━━━━━━━━┓
-   《✧》 *By Charly-Bot | HOT ON* 《✧》 
-┗━━━━━━━━━━━━━━━━━━━━┛`,
+┏━━━━━━━━━━━━━━━━━━━━━━━━┓
+   《✧》 *By Charly-Bot* 《✧》 
+┗━━━━━━━━━━━━━━━━━━━━━━━━┛`,
             contextInfo: {
                 forwardingScore: 999,
                 isForwarded: true // Esto le da el toque de "Reenviado" arriba de la foto
