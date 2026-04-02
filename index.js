@@ -492,21 +492,18 @@ function calcularProgreso(nivel, expActual) {
 
 async function uploadImage(buffer) {
     try {
-        const { fileTypeFromBuffer } = await import('file-type'); // Para detectar el formato real
-        const type = await fileTypeFromBuffer(buffer);
-        const ext = type ? type.ext : 'png';
-        
         const bodyForm = new FormData();
-        bodyForm.append('fileToUpload', buffer, `file.${ext}`);
+        // Le ponemos un nombre fijo 'image.png' para que no falle
+        bodyForm.append('fileToUpload', buffer, 'image.png');
         bodyForm.append('reqtype', 'fileupload');
 
         const res = await axios.post('https://catbox.moe/user/api.php', bodyForm, {
             headers: bodyForm.getHeaders()
         });
-        
-        return res.data; // Esto nos devuelve el link directo
+        return res.data; // Esto devuelve el link directo
     } catch (err) {
-        throw new Error('Error al subir imagen a Catbox');
+        console.error('Error al subir a Catbox:', err);
+        throw new Error('No se pudo subir la imagen a internet');
     }
 }
 
@@ -1613,47 +1610,43 @@ break;
 ///////
 
 case 'hd': {
-    try {
-        // Detectar si el mensaje tiene imagen o si es una respuesta a una imagen
-        const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
-        const isImage = m.message.imageMessage;
-        const isQuotedImage = quoted?.imageMessage;
+            try {
+                // 1. Detectar si el mensaje es una imagen o responde a una
+                const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
+                const isImage = m.message.imageMessage;
+                const isQuotedImage = quoted?.imageMessage;
 
-        if (!isImage && !isQuotedImage) {
-            return sock.sendMessage(from, { text: '❌ Responde a una imagen o envía una con .hd' }, { quoted: m });
+                if (!isImage && !isQuotedImage) return sock.sendMessage(from, { text: '❌ Responde a una imagen para mejorarla.' }, { quoted: m });
+
+                await sock.sendMessage(from, { text: '⏳ *Mejorando calidad para el clan HOT ON...*' }, { quoted: m });
+
+                // 2. Descargar la imagen de WhatsApp
+                const messageToDownload = isQuotedImage ? quoted.imageMessage : m.message.imageMessage;
+                const stream = await downloadContentFromMessage(messageToDownload, 'image');
+                let buffer = Buffer.from([]);
+                for await (const chunk of stream) {
+                    buffer = Buffer.concat([buffer, chunk]);
+                }
+
+                // 3. Subir a Catbox (usando la función que acabas de poner arriba)
+                const imageUrl = await uploadImage(buffer); 
+
+                // 4. Llamar a la API de Upscale
+                const apiKey = "sylphy-ty5xtWm";
+                const apiUrl = `https://sylphy.xyz/tools/upscale?url=${imageUrl}&scale=2&api_key=${apiKey}`;
+
+                // 5. Enviar el resultado al chat
+                await sock.sendMessage(from, { 
+                    image: { url: apiUrl }, 
+                    caption: '✅ *¡Listo! Imagen en HD para el clan.*' 
+                }, { quoted: m });
+
+            } catch (err) {
+                console.error("ERROR EN HD:", err);
+                sock.sendMessage(from, { text: '❌ Error: ' + err.message }, { quoted: m });
+            }
         }
-
-        await sock.sendMessage(from, { text: '⏳ *Procesando HD para Ti...*' }, { quoted: m });
-
-        // Definir qué vamos a descargar
-        const messageToDownload = isQuotedImage ? quoted.imageMessage : m.message.imageMessage;
-        
-        // Descargar el contenido
-        const stream = await downloadContentFromMessage(messageToDownload, 'image');
-        let buffer = Buffer.from([]);
-        for await (const chunk of stream) {
-            buffer = Buffer.concat([buffer, chunk]);
-        }
-
-        // Subir a internet (Asegúrate de tener la función uploadToTelegraph arriba)
-        const imageUrl = await uploadToTelegraph(buffer);
-
-        // Tu API de las capturas
-        const apiKey = "sylphy-ty5xtWm";
-        const apiUrl = `https://sylphy.xyz/tools/upscale?url=${imageUrl}&scale=2&api_key=${apiKey}`;
-
-        // Enviar resultado
-        await sock.sendMessage(from, { 
-            image: { url: apiUrl }, 
-            caption: '✅ *Imagen mejorada con éxito*' 
-        }, { quoted: m });
-
-    } catch (err) {
-        console.error("ERROR EN HD:", err);
-        sock.sendMessage(from, { text: '❌ Hubo un fallo: ' + err.message }, { quoted: m });
-    }
-}
-break;
+        break;
 
 
 
