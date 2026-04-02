@@ -1618,9 +1618,9 @@ case 'hd': {
 
         if (!isImage && !isQuotedImage) return sock.sendMessage(from, { text: '❌ Responde a una imagen para mejorarla.' }, { quoted: m });
 
-        await sock.sendMessage(from, { text: '⏳ *Mejorando calidad... (esto puede tardar hasta 2 min)*' }, { quoted: m });
+        await sock.sendMessage(from, { text: '⏳ *Mejorando calidad con IA... espera un momento.*' }, { quoted: m });
 
-        // 1. Descargar imagen
+        // 1. Descargar imagen de WhatsApp
         const messageToDownload = isQuotedImage ? quoted.imageMessage : m.message.imageMessage;
         const stream = await downloadContentFromMessage(messageToDownload, 'image');
         let buffer = Buffer.from([]);
@@ -1628,47 +1628,39 @@ case 'hd': {
             buffer = Buffer.concat([buffer, chunk]);
         }
 
-        // 2. Subir imagen (Asegúrate que uploadImage funcione bien)
+        // 2. Subir a Catbox (Tu función actual)
         const imageUrl = await uploadImage(buffer); 
-        console.log("Link de imagen subida:", imageUrl); // Verificamos en consola si subió bien
+        console.log("Link subido a Catbox:", imageUrl);
 
-        // 3. Petición a la API con más tiempo de espera
-        const apiKey = "sylphy-ty5xtWm";
-        const apiUrl = `https://sylphy.xyz/tools/unblur?url=${encodeURIComponent(imageUrl)}&api_key=${apiKey}`;
+        // 3. NUEVA API (Mucho más estable que Sylphy)
+        // Esta API es especialista en Remini/HD y no pide Key
+        const apiUrl = `https://api.vreden.my.id/api/remini?url=${encodeURIComponent(imageUrl)}`;
 
-        const response = await axios.get(apiUrl, { timeout: 120000 }); // 2 minutos
+        const response = await axios.get(apiUrl, { timeout: 120000 });
         const res = response.data;
 
-        // LOG DE DEPURACIÓN (Míralo en tu terminal si falla)
-        console.log("RESPUESTA API HD:", res);
+        // 4. VALIDACIÓN DEL RESULTADO
+        // Buscamos la URL en 'result' o 'url'
+        const finalUrl = res.result || res.url || (res.data && res.data.url);
 
-        // 4. Validación robusta
-        let finalUrl = null;
-        if (res.status && res.result) {
-            finalUrl = typeof res.result === 'string' ? res.result : res.result.output;
-        }
-
-        if (finalUrl && finalUrl.startsWith('http')) {
+        if (finalUrl && typeof finalUrl === 'string' && finalUrl.startsWith('http')) {
             await sock.sendMessage(from, { 
                 image: { url: finalUrl }, 
-                caption: '✅ *Calidad mejorada con éxito.*',
+                caption: '✅ *¡Listo! Imagen mejorada por Charly-Bot.*',
                 mimetype: 'image/jpeg' 
             }, { quoted: m });
         } else {
-            // Si la API responde pero no trae imagen
-            const motivo = res.message || "Servidor saturado o API Key inválida.";
-            throw new Error(motivo);
+            throw new Error('La nueva API no devolvió una imagen válida.');
         }
 
     } catch (err) {
-        console.error("ERROR CRÍTICO EN HD:", err);
-        let txt = '❌ Error inesperado.';
+        console.error("ERROR EN HD:", err);
+        let msg = '❌ El servidor de HD está saturado o en mantenimiento.';
         
-        if (err.code === 'ECONNABORTED') txt = '❌ La API tardó demasiado. Intenta con otra foto.';
-        else if (err.response?.status === 404) txt = '❌ El servidor de HD no encontró la imagen.';
-        else if (err.message) txt = `❌ Detalle: ${err.message}`;
+        if (err.code === 'ECONNABORTED') msg = '❌ Tiempo agotado. La imagen es muy pesada.';
+        else if (err.message) msg = `❌ Error: ${err.message}`;
         
-        sock.sendMessage(from, { text: txt }, { quoted: m });
+        sock.sendMessage(from, { text: msg }, { quoted: m });
     }
 }
 break;
