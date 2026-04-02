@@ -1818,22 +1818,14 @@ break;
 
 
 case 'menu': {
-    const axios = require('axios'); // Asegúrate de tener esto arriba o aquí
-    const imagenUrl = 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png'; 
-    const linkCanal = 'https://whatsapp.com/channel/0029VbBweWy0gcfSQ572kD31'; 
+    const imagenMenu = 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png'; 
 
     try {
-        // Descargamos la imagen para que WhatsApp no la ignore
-        const response = await axios.get(imagenUrl, { responseType: 'arraybuffer' });
-        const buffer = Buffer.from(response.data, 'utf-8');
-
         await sock.sendMessage(from, { 
-            text: `Hola! Soy *CHARLY-BOT* (V2)
-AQUÍ TIENES LA LISTA DE COMANDOS
-
-《✧》 *COMUNIDAD* 《✧》
-◈ .canal
-◈ .grupo
+            image: { url: imagenMenu }, 
+            caption: `╔════《 ✧ CHARLY-BOT ✧ 》════╗
+      ✨ *BOT MAESTRO V2* ✨     
+╚════════════════════════╝
 
 《✧》 *INTELIGENCIA ARTIFICIAL* 《✧》
 ◈ .ai
@@ -1887,27 +1879,16 @@ AQUÍ TIENES LA LISTA DE COMANDOS
 
 ┏━━━━━━━━━━━━━━━━━━━━┓
    《✧》 *By Charly-Bot | HOT ON* 《✧》 
-┗━━━━━━━━━━━━━━━━━━━━┛
-
-📢 *CANAL:* ${linkCanal}`,
+┗━━━━━━━━━━━━━━━━━━━━┛`,
             contextInfo: {
                 forwardingScore: 999,
-                isForwarded: true,
-                externalAdReply: {
-                    title: 'CHARLY-BOT V2 ⚡',
-                    body: 'Bot Maestro | Clan HOT ON',
-                    thumbnail: buffer, // USAMOS EL BUFFER AQUÍ PARA QUE NO FALLE
-                    sourceUrl: linkCanal,
-                    mediaType: 1,
-                    renderLargerThumbnail: true, 
-                    showAdAttribution: true
-                }
+                isForwarded: true // Esto le da el toque de "Reenviado" arriba de la foto
             }
         }, { quoted: m });
 
     } catch (e) {
         console.error("Error en el menú:", e);
-        sock.sendMessage(from, { text: "❌ Error al cargar la imagen del menú." }, { quoted: m });
+        sock.sendMessage(from, { text: "❌ Error al enviar el menú." });
     }
 }
 break;
