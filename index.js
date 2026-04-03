@@ -1959,68 +1959,83 @@ case 'menu': {
     const imagenMenu = 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png'; 
 
     try {
+        const menuCaption = `❀ *CHARLY-BOT MAESTRO V2* ❀
+
+> ✨ *SISTEMA DE COMANDOS* ✨
+
+《✧》 *INTELIGENCIA ARTIFICIAL*
+◈ \`.copilot\`
+◈ \`.ia\`
+◈ \`.gemini\`
+◈ \`.llama\`
+◈ \`.brat\`
+◈ \`.letra\`
+◈ \`.lyrics\`
+
+《✧》 *MULTIMEDIA & DOWNLOAD*
+◈ \`.audio\`
+◈ \`.video\`
+◈ \`.album\`
+◈ \`.tt\`
+◈ \`.playlist\`
+◈ \`.ytaudio\`
+◈ \`.ytvideo\`
+
+《✧》 *STICKERS & PACKS* ❀
+◈ \`.s\` 
+◈ \`.sticker\`
+◈ \`#newpack\`
+◈ \`#addsticker\`
+◈ \`#delmeta\`
+◈ \`#getpack\`
+◈ \`#setpack\`
+
+《✧》 *ENTRETENIMIENTO*
+◈ \`.kiss\`
+◈ \`.slap\`
+◈ \`.hug\`
+◈ \`.kill\`
+◈ \`.translate\`
+◈ \`.nsfwmenu\`
+
+《✧》 *ADMINISTRACIÓN*
+◈ \`.tag\`
+◈ \`.kick\`
+◈ \`.add\`
+◈ \`.del\`
+◈ \`.promote\`
+◈ \`.demote\`
+◈ \`.open\`
+◈ \`.close\`
+◈ \`.antilink on/off\`
+
+《✧》 *ECONOMÍA & PERFIL*
+◈ \`.profile\`
+◈ \`.menuperfil\`
+◈ \`.work\`
+◈ \`.rob\`
+
+《✧》 *SISTEMA & CONFIG*
+◈ \`.p\`
+◈ \`.reload\`
+
+> ❀ *By Charly Pelón 😎*
+> *Miguel Auza, Zacatecas*`;
+
         await sock.sendMessage(from, { 
             image: { url: imagenMenu }, 
-            caption: `╔════《 ✧ CHARLY-BOT ✧ 》════╗
-      ✨ *BOT MAESTRO V2* ✨     
-╚════════════════════════╝
-
-《✧》 *INTELIGENCIA ARTIFICIAL* 《✧》
-◈ .ai
-◈ .v
-◈ .copilot
-◈ .ia
-◈ .gemini
-◈ .llama
-◈ .brat
-◈ .letra
-◈ .lyrics
-
-《✧》 *MULTIMEDIA & DOWNLOAD* 《✧》
-◈ .audio
-◈ .video
-◈ .album
-◈ .tt
-◈ .playlist
-◈ .ytaudio
-◈ .ytvideo
-
-《✧》 *ENTRETENIMIENTO* 《✧》
-◈ .kiss
-◈ .slap
-◈ .hug
-◈ .kill
-◈ .translate
-◈ .nsfwmenu
-
-《✧》 *ADMINISTRACIÓN* 《✧》
-◈ .tag
-◈ .kick
-◈ .add
-◈ .del
-◈ .promote
-◈ .demote
-◈ .open
-◈ .close
-◈ .antilink on/off
-
-《✧》 *ECONOMÍA & PERFIL* 《✧》
-◈ .profile
-◈ .menuperfil
-◈ .work
-◈ .rob
-
-《✧》 *SISTEMA & CONFIG* 《✧》
-◈ .s
-◈ .p
-◈ .reload
-
-┏━━━━━━━━━━━━━━━━━━━━━━━━┓
-   《✧》 *By Charly-Bot* 《✧》 
-┗━━━━━━━━━━━━━━━━━━━━━━━━┛`,
+            caption: menuCaption,
             contextInfo: {
                 forwardingScore: 999,
-                isForwarded: true // Esto le da el toque de "Reenviado" arriba de la foto
+                isForwarded: true,
+                externalAdReply: {
+                    title: "❀ Charly-Bot Maestro V2 ❀",
+                    body: "Online | Sistema de Automatización",
+                    thumbnailUrl: imagenMenu,
+                    sourceUrl: "https://wa.me/524991213571",
+                    mediaType: 1,
+                    renderLargerThumbnail: false
+                }
             }
         }, { quoted: m });
 
@@ -2031,55 +2046,6 @@ case 'menu': {
 }
 break;
 
-case 'v': case 'ai': {
-    if (!text) return sock.sendMessage(from, { text: '¿Qué quieres que diga, pariente?' });
-    
-    try {
-        const axios = require('axios');
-        // Llamada a Mistral
-        const resIA = await axios.post('https://api.mistral.ai/v1/chat/completions', {
-            model: "open-mistral-7b",
-            messages: [
-                { role: "system", content: "Eres Bot Maestro . Habla corto, máximo 2 frases, usa modismos mexicanos y sé directo." }, 
-                { role: "user", content: text }
-            ]
-        }, { headers: { 'Authorization': `Bearer ${MISTRAL_API_KEY}` } });
-
-        let respuestaTexto = resIA.data.choices[0].message.content;
-
-        if (command === 'ai') {
-            await sock.sendMessage(from, { text: respuestaTexto });
-        } else {
-            // --- LIMPIEZA PARA EL AUDIO ---
-            let textoLimpio = respuestaTexto
-                .replace(/[*_~]/g, '') 
-                .replace(/[^\w\sáéíóúÁÉÍÓÚñÑ,.?¡!¿]/g, '') 
-                .slice(0, 200); 
-
-            const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(textoLimpio)}&tl=es&client=tw-ob`;
-            
-            // --- EL TRUCO: Descargar el audio primero ---
-            const resAudio = await axios({
-                method: 'get',
-                url: ttsUrl,
-                responseType: 'arraybuffer',
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
-                }
-            });
-
-            await sock.sendMessage(from, { 
-                audio: Buffer.from(resAudio.data), // Enviamos el audio real, no el link
-                mimetype: 'audio/mp4', 
-                ptt: true 
-            }, { quoted: m });
-        }
-    } catch (e) { 
-        console.error("Error en IA/Audio:", e.message);
-        await sock.sendMessage(from, { text: '❌ Valio queso el audio, intenta de nuevo.' }); 
-    }
-}
-break;
 
 
 case 'kiss': case 'hug': case 'slap': {
