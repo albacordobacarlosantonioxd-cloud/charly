@@ -2032,7 +2032,6 @@ case 'menu': {
                     title: "❀ Charly-Bot Maestro V2 ❀",
                     body: "Online | Sistema de Automatización",
                     thumbnailUrl: imagenMenu,
-                    sourceUrl: "https://wa.me/524991213571",
                     mediaType: 1,
                     renderLargerThumbnail: false
                 }
