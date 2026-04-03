@@ -1810,6 +1810,150 @@ case 'img': {
 }
 break; 
 
+///////
+
+case 'newpack': {
+    const packName = m.text.split(' ').slice(1).join(' ');
+    if (!packName) return sock.sendMessage(from, { text: '❌ Ponle un nombre al paquete.' });
+
+    // Guardar en MongoDB (opcional, para control)
+    await db.collection('packs').updateOne(
+        { owner: m.sender, name: packName },
+        { $set: { createdAt: new Date(), public: false } },
+        { upsert: true }
+    );
+
+    // La respuesta con el diseño que quieres
+    const responseText = `❀ El paquete de stickers \`${packName}\` ha sido creado exitosamente!\n\n> Puedes agregar stickers a este paquete respondiendo a un sticker con *#addsticker ${packName}*`;
+
+    await sock.sendMessage(from, { text: responseText }, { quoted: m });
+}
+break;
+
+case 'addsticker': {
+    try {
+        const packName = m.text.split(' ').slice(1).join(' ');
+        const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
+        
+        // Verificamos si es imagen, sticker o video
+        const isImage = m.message.imageMessage || quoted?.imageMessage;
+        const isSticker = quoted?.stickerMessage;
+        const isVideo = m.message.videoMessage || quoted?.videoMessage;
+
+        if (!packName) return sock.sendMessage(from, { text: '❌ Indica a qué paquete lo quieres agregar.' });
+        if (!isImage && !isSticker && !isVideo) return sock.sendMessage(from, { text: '❌ Responde a una imagen o sticker para agregarlo al paquete.' });
+
+        // 1. Descargar el contenido
+        let type = isImage ? 'image' : (isSticker ? 'sticker' : 'video');
+        const messageToDownload = isSticker ? quoted.stickerMessage : (quoted?.imageMessage || m.message.imageMessage || quoted?.videoMessage || m.message.videoMessage);
+        
+        const stream = await downloadContentFromMessage(messageToDownload, type === 'sticker' ? 'image' : type); 
+        let buffer = Buffer.from([]);
+        for await (const chunk of stream) { buffer = Buffer.concat([buffer, chunk]); }
+
+        // 2. Crear Sticker con tus Metadatos Estilo "estilos brat"
+        const sticker = new Sticker(buffer, {
+            pack: packName,              
+            author: 'Charly Pelón 😎',    
+            type: StickerTypes.FULL,
+            id: packName + m.sender      
+        });
+
+        const stickerBuffer = await sticker.toBuffer();
+
+        // 3. Enviar el sticker generado
+        await sock.sendMessage(from, { sticker: stickerBuffer }, { quoted: m });
+
+        // 4. Confirmación con tu nuevo estilo ❀
+        const successMsg = `❀ El sticker ha sido agregado al paquete de stickers \`${packName}\` !\n\n> Puedes seguir agregando más respondiendo con *#addsticker ${packName}*`;
+        
+        await sock.sendMessage(from, { text: successMsg }, { quoted: m });
+
+    } catch (err) {
+        console.error(err);
+        sock.sendMessage(from, { text: '❌ Hubo un error al procesar el sticker.' });
+    }
+}
+break;
+
+case 'delmeta': {
+    const packName = m.text.split(' ').slice(1).join(' ');
+    const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
+    
+    if (!packName) return sock.sendMessage(from, { text: '❌ Indica el nombre del paquete.' });
+    if (!quoted?.stickerMessage) return sock.sendMessage(from, { text: '❌ Responde al sticker que quieres eliminar del pack.' });
+
+    // Borramos de la DB usando el hash único del sticker
+    const result = await db.collection('packs').updateOne(
+        { owner: m.sender, name: packName },
+        { $pull: { stickers: { fileSha256: quoted.stickerMessage.fileSha256 } } } 
+    );
+
+    const delmetaText = `❀ El sticker ha sido eliminado del paquete \`${packName}\` exitosamente!\n\n> El espacio en el pack ha sido liberado.`;
+    
+    await sock.sendMessage(from, { text: delmetaText }, { quoted: m });
+}
+break;
+
+
+case 'getpack': {
+    const packName = m.text.split(' ').slice(1).join(' ');
+    if (!packName) return sock.sendMessage(from, { text: '❌ ¿Qué paquete quieres ver?' });
+
+    const pack = await db.collection('packs').findOne({ name: packName });
+    if (!pack || !pack.stickers || pack.stickers.length === 0) {
+        return sock.sendMessage(from, { text: `❌ El paquete \`${packName}\` no existe o está vacío.` });
+    }
+
+    // Usamos el primer sticker del pack como "portada" para la tarjeta
+    const portadaSticker = pack.stickers[0].url;
+
+    const getpackText = `❀ Paquete \`${packName}\` encontrado!\n\n> Toca abajo para ver todos los stickers del pack.`;
+
+    await sock.sendMessage(from, {
+        text: getpackText,
+        contextInfo: {
+            externalAdReply: {
+                title: `${packName}`, // Nombre del pack
+                body: `Paquete de stickers creado por Charly Pelón 😎`, // Tu marca
+                thumbnailUrl: portadaSticker, // La imagen que sale en chiquito
+                sourceUrl: 'https://wa.me/524991213571', // Opcional: link a tu bot
+                mediaType: 1,
+                renderLargerThumbnail: false,
+                showAdAttribution: false 
+            }
+        }
+    }, { quoted: m });
+
+    // OPCIONAL: Si de todos modos quieres que mande UNO para que lo vean
+    await sock.sendMessage(from, { sticker: { url: portadaSticker } });
+}
+break;
+
+case 'setpack': {
+    const args = m.text.split(' ');
+    const packName = args[1];
+    const status = args[2]; // 'on' (público) o 'off' (privado)
+
+    if (!packName || !['on', 'off'].includes(status)) {
+        return sock.sendMessage(from, { text: '❌ Uso: #setpack [nombre] [on/off]' });
+    }
+
+    const isPublic = status === 'on';
+    await db.collection('packs').updateOne(
+        { owner: m.sender, name: packName },
+        { $set: { public: isPublic } }
+    );
+
+    const publicText = `❀ La visibilidad del paquete \`${packName}\` ha cambiado!\n\n> Ahora el estado del pack es: *${isPublic ? 'PÚBLICO 🌍' : 'PRIVADO 🔒'}*`;
+    
+    await sock.sendMessage(from, { text: publicText }, { quoted: m });
+}
+break;
+
+
+///////
+
 
 case 'menu': {
     const imagenMenu = 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png'; 
