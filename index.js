@@ -1905,221 +1905,617 @@ break;
 
 ///////
 
-case 'newpack': {
-    // 1. Intentamos sacar el nombre después del comando
-    const args = text.trim().split(/\s+/);
-    let packName = args.slice(1).join(' ').trim();
-
-    // 2. LA MAGIA: Si no pusiste nombre, el bot le pone uno automático
-    // Usamos 'Pack-' + los últimos 4 dígitos del tiempo actual para que sea único
-    if (!packName || packName === "") {
-        packName = `Pack-${Date.now().toString().slice(-4)}`;
-    }
-
+case 'newpack': case 'newstickerpack': {
     try {
-        // Guardamos o actualizamos en MongoDB
-        await Pack.updateOne(
-            { owner: m.sender, name: packName },
-            { 
-                $setOnInsert: { 
-                    createdAt: new Date(), 
-                    isPublic: false,
-                    stickers: [] 
-                } 
-            },
-            { upsert: true }
-        );
+        // 1. Sacamos el nombre del pack de la variable 'text'
+        const args = text.trim().split(/\s+/);
+        let name = args.slice(1).join(' ').trim();
 
-        // 3. Confirmación con estética ❀
-        const responseText = `❀ *NUEVO PAQUETE CREADO* ❀\n\n> 📦 Nombre: \`${packName}\` \n> ✅ Estado: Listo para stickers\n\nPara agregarle contenido, responde a un sticker o imagen con:\n*${prefix}addsticker ${packName}*`;
+        // 2. Si no pusiste nombre, le inventamos uno para que no truene
+        if (!name) {
+            name = `Pack-${Date.now().toString().slice(-4)}`;
+        }
 
-        await sock.sendMessage(from, { text: responseText }, { quoted: m });
+        // 3. Validación de longitud (máximo 64 para que no rompa la DB)
+        if (name.length > 64) {
+            return sock.sendMessage(from, { text: '❌ El nombre es demasiado largo, pariente.' }, { quoted: m });
+        }
+
+        // 4. BUSCAR SI YA EXISTE EN TU MONGODB
+        // Usamos el modelo 'Pack' que es el que tienes definido
+        const existingPack = await Pack.findOne({ owner: m.sender, name: name });
+
+        if (existingPack) {
+            return sock.sendMessage(from, { text: `❌ Ya tienes un paquete llamado \`${name}\`, usa otro nombre compa.` }, { quoted: m });
+        }
+
+        // 5. CREAR EL NUEVO PACK EN LA BASE DE DATOS
+        const newPack = new Pack({
+            owner: m.sender, // Tu ID de WhatsApp
+            name: name,
+            author: 'Charly-Bot 😎', 
+            desc: `Paquete creado por ${m.pushName || 'Usuario'}`,
+            stickers: [], // Empieza vacío
+            isPublic: false, // Por defecto privado
+            createdAt: new Date()
+        });
+
+        // 6. Guardar en MongoDB
+        await newPack.save();
+
+        // 7. Confirmación estilo Charly ❀
+        const successMsg = `❀ *PAQUETE CREADO EN DB* ❀\n\n` +
+                           `> 📦 *Nombre:* \`${name}\` \n` +
+                           `> ✅ *Estado:* Guardado en MongoDB\n\n` +
+                           `Para agregar stickers, responde a una imagen con:\n` +
+                           `*${prefix}addsticker ${name}*`;
+
+        await sock.sendMessage(from, { text: successMsg }, { quoted: m });
 
     } catch (e) {
-        console.error("Error en MongoDB:", e);
-        sock.sendMessage(from, { text: '❌ Hubo un error al guardar en la base de datos, compa.' });
+        console.error("Error al crear pack en MongoDB:", e);
+        sock.sendMessage(from, { text: `> ❌ Error en la base de datos: [${e.message}]` }, { quoted: m });
     }
 }
 break;
 
-case 'addsticker': {
+case 'addsticker': case 'stickeradd': {
     try {
-        // 1. Agarramos el nombre del pack igual que en newpack
+        // 1. Sacamos el nombre del pack desde la variable 'text'
         const args = text.trim().split(/\s+/);
         const packName = args.slice(1).join(' ').trim();
         
+        if (!packName) return sock.sendMessage(from, { text: `❌ ¡Falta el nombre del paquete, pariente!\n\n> Ejemplo: *${prefix}addsticker mi pack*` }, { quoted: m });
+
+        // 2. Verificar que estés respondiendo a un sticker
         const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
-        
-        // Detectar qué nos mandaron (imagen, sticker o video)
-        const isImage = m.message.imageMessage || quoted?.imageMessage;
         const isSticker = quoted?.stickerMessage;
-        const isVideo = m.message.videoMessage || quoted?.videoMessage;
 
-        if (!packName) return sock.sendMessage(from, { text: `❌ Indica a qué paquete lo quieres agregar, pariente.\n\n> Ejemplo: *${prefix}addsticker estilos brat*` }, { quoted: m });
-        if (!isImage && !isSticker && !isVideo) return sock.sendMessage(from, { text: '❌ Responde a una imagen, video o sticker para agregarlo.' }, { quoted: m });
+        if (!isSticker) return sock.sendMessage(from, { text: '❌ Responde a un sticker para agregarlo al paquete.' }, { quoted: m });
 
-        // 2. Descargar el contenido (Ajustado para que no truene)
-        let type = isImage ? 'image' : (isSticker ? 'sticker' : 'video');
-        const messageToDownload = isSticker ? quoted.stickerMessage : (quoted?.imageMessage || m.message.imageMessage || quoted?.videoMessage || m.message.videoMessage);
+        // 3. Buscar el paquete en MongoDB
+        const pack = await Pack.findOne({ owner: m.sender, name: packName });
         
-        // El segundo parámetro de downloadContent debe ser 'image' si es sticker o imagen
-        const stream = await downloadContentFromMessage(messageToDownload, isSticker || isImage ? 'image' : 'video'); 
+        if (!pack) {
+            return sock.sendMessage(from, { text: `❌ No encontré el paquete \`${packName}\`. Créalo primero con *${prefix}newpack ${packName}*` }, { quoted: m });
+        }
+
+        // 4. Límite de stickers (para que no pese tanto tu DB)
+        if (pack.stickers.length >= 50) {
+            return sock.sendMessage(from, { text: '❌ Este paquete ya está lleno (máximo 50 stickers), pariente.' }, { quoted: m });
+        }
+
+        // 5. Descargar el sticker
+        const stream = await downloadContentFromMessage(quoted.stickerMessage, 'image');
         let buffer = Buffer.from([]);
         for await (const chunk of stream) { buffer = Buffer.concat([buffer, chunk]); }
 
-        // 3. Crear el Sticker con tus Metadatos
-        const sticker = new Sticker(buffer, {
-            pack: packName,              
-            author: 'Charly Pelón 😎',    
-            type: StickerTypes.FULL,
-            id: packName + m.sender      
-        });
+        if (!buffer || buffer.length === 0) return sock.sendMessage(from, { text: '❌ No pude descargar el sticker, intenta de nuevo.' });
 
-        const stickerBuffer = await sticker.toBuffer();
+        // 6. Convertir a Base64 para guardarlo en Mongo
+        const base64Sticker = buffer.toString('base64');
 
-        // 4. GUARDAR EN MONGODB
-        // Buscamos si el pack existe antes de meterle el sticker
-        const checkPack = await Pack.findOne({ owner: m.sender, name: packName });
-        if (!checkPack) return sock.sendMessage(from, { text: `❌ El paquete \`${packName}\` no existe. Créalo primero con *.newpack ${packName}*` }, { quoted: m });
+        // 7. Evitar duplicados en el mismo pack
+        // Revisamos si ese código base64 ya está en el array de stickers
+        const isDuplicate = pack.stickers.some(s => s.base64 === base64Sticker);
+        if (isDuplicate) {
+            return sock.sendMessage(from, { text: `❌ Ese sticker ya lo tienes en el paquete \`${packName}\`.` }, { quoted: m });
+        }
 
+        // 8. GUARDAR EN MONGODB
         await Pack.updateOne(
             { owner: m.sender, name: packName },
             { 
                 $push: { 
                     stickers: { 
-                        fileSha256: isSticker ? quoted.stickerMessage.fileSha256 : Buffer.from(stickerBuffer).toString('base64').slice(0, 10),
+                        base64: base64Sticker,
                         createdAt: new Date()
                     } 
+                },
+                $set: { lastModified: new Date() }
+            }
+        );
+
+        // 9. Confirmación final ❀
+        const successMsg = `❀ *STICKER AGREGADO* ❀\n\n` +
+                           `> 📦 *Pack:* \`${packName}\` \n` +
+                           `> 📊 *Total:* ${pack.stickers.length + 1}/50\n\n` +
+                           `_Usa ${prefix}getpack ${packName} para ver tu colección._`;
+
+        await sock.sendMessage(from, { text: successMsg }, { quoted: m });
+
+    } catch (e) {
+        console.error("Error en addsticker:", e);
+        sock.sendMessage(from, { text: `> ❌ ¡Hubo un fallo, pariente!: [${e.message}]` }, { quoted: m });
+    }
+}
+break;
+
+case 'delmeta': case 'delstickermeta': {
+    try {
+        // 1. Buscamos al usuario en MongoDB
+        const user = await User.findOne({ id: m.sender });
+
+        // 2. Verificamos si ya estaban vacíos para no hacer jale de más
+        if (!user || ((!user.metadatos || user.metadatos === '') && (!user.metadatos2 || user.metadatos2 === ''))) {
+            return sock.sendMessage(from, { text: '《✧》No tienes metadatos asignados en tu cuenta, pariente.' }, { quoted: m });
+        }
+
+        // 3. ACTUALIZAMOS EN MONGODB (Limpiamos los campos)
+        await User.updateOne(
+            { id: m.sender },
+            { 
+                $set: { 
+                    metadatos: '', 
+                    metadatos2: '' 
                 } 
             }
         );
 
-        // 5. Enviar el sticker y la confirmación ❀
-        await sock.sendMessage(from, { sticker: stickerBuffer }, { quoted: m });
+        // 4. Confirmación estilo Charly ❀
+        const successMsg = `❀ *METADATOS ELIMINADOS* ❀\n\n` +
+                           `> 🗑️ *Estado:* Limpios en MongoDB\n` +
+                           `> 📝 *Nota:* Ahora tus stickers usarán el nombre por defecto del bot.\n\n` +
+                           `_Puedes volver a configurarlos con ${prefix}setmeta_`;
 
-        const successMsg = `❀ ¡Sticker agregado al paquete \`${packName}\`!\n\n> Sigue agregando más con: *${prefix}addsticker ${packName}*`;
-        
         await sock.sendMessage(from, { text: successMsg }, { quoted: m });
 
-    } catch (err) {
-        console.error("Error en addsticker:", err);
-        sock.sendMessage(from, { text: '❌ Hubo un error al procesar el sticker o guardar en la base de datos.' });
+    } catch (e) {
+        console.error("Error en delmeta:", e);
+        sock.sendMessage(from, { text: `> ❌ Error al limpiar la base de datos: [${e.message}]` }, { quoted: m });
     }
 }
 break;
 
-case 'delmeta': {
+case 'delpack': {
     try {
-        const text = m.text || m.caption || ""; // Parche de seguridad
-        const packName = text.split(' ').slice(1).join(' ');
-        const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
-        
-        if (!packName) return sock.sendMessage(from, { text: '❌ Indica el nombre del paquete.' });
-        if (!quoted?.stickerMessage) return sock.sendMessage(from, { text: '❌ Responde al sticker que quieres eliminar del pack.' });
+        // 1. Sacamos el nombre del pack de la variable 'text'
+        const args = text.trim().split(/\s+/);
+        const packName = args.slice(1).join(' ').trim();
 
-        // Usamos el modelo Pack de Mongoose con $pull para sacar el sticker del array
-        const result = await Pack.updateOne(
-            { owner: m.sender, name: packName },
-            { $pull: { stickers: { fileSha256: quoted.stickerMessage.fileSha256 } } } 
-        );
+        if (!packName) return sock.sendMessage(from, { text: `❌ Especifica el nombre del paquete que quieres borrar, pariente.\n\n> Ejemplo: *${prefix}delpack mis stickers*` }, { quoted: m });
 
-        if (result.modifiedCount === 0) {
-            return sock.sendMessage(from, { text: `❌ No se encontró ese sticker en el paquete \`${packName}\`.` });
+        // 2. BUSCAR Y ELIMINAR EN MONGODB
+        // Usamos deleteOne para borrar solo el pack que coincide con el dueño y el nombre
+        const result = await Pack.deleteOne({ owner: m.sender, name: packName });
+
+        // 3. Verificar si el paquete existía y fue borrado
+        if (result.deletedCount === 0) {
+            return sock.sendMessage(from, { text: `❌ No encontré ningún paquete tuyo llamado \`${packName}\`.` }, { quoted: m });
         }
 
-        const delmetaText = `❀ El sticker ha sido eliminado del paquete \`${packName}\` exitosamente!\n\n> El espacio en el pack ha sido liberado.`;
-        
-        await sock.sendMessage(from, { text: delmetaText }, { quoted: m });
+        // 4. Confirmación estilo Charly ❀
+        const successMsg = `❀ *PAQUETE ELIMINADO* ❀\n\n` +
+                           `> 🗑️ *Pack:* \`${packName}\` \n` +
+                           `> ✅ *Estado:* Borrado de MongoDB correctamente.\n\n` +
+                           `_Ya puedes crear uno nuevo con ese nombre si quieres._`;
+
+        await sock.sendMessage(from, { text: successMsg }, { quoted: m });
 
     } catch (e) {
-        console.error(e);
-        sock.sendMessage(from, { text: '❌ Hubo un error al intentar eliminar el sticker.' });
+        console.error("Error en delpack:", e);
+        sock.sendMessage(from, { text: `> ❌ Error al intentar borrar en la base de datos: [${e.message}]` }, { quoted: m });
+    }
+}
+break;
+
+case 'stickerdel': case 'delsticker': {
+    try {
+        // 1. Sacamos el nombre del pack de la variable 'text'
+        const args = text.trim().split(/\s+/);
+        const packName = args.slice(1).join(' ').trim();
+        
+        if (!packName) return sock.sendMessage(from, { text: `❌ ¡Falta el nombre del paquete, pariente!\n\n> Ejemplo: *${prefix}delsticker mi pack* (Responde al sticker)` }, { quoted: m });
+
+        // 2. Verificar que estés respondiendo a un sticker
+        const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
+        const isSticker = quoted?.stickerMessage;
+
+        if (!isSticker) return sock.sendMessage(from, { text: '❌ Responde al sticker que quieres quitar del paquete.' }, { quoted: m });
+
+        // 3. Buscar el paquete en MongoDB para ver si existe
+        const pack = await Pack.findOne({ owner: m.sender, name: packName });
+        
+        if (!pack) {
+            return sock.sendMessage(from, { text: `❌ No encontré el paquete \`${packName}\` en tu cuenta.` }, { quoted: m });
+        }
+
+        if (!pack.stickers || pack.stickers.length === 0) {
+            return sock.sendMessage(from, { text: '❌ Ese paquete ya está vacío, compa.' }, { quoted: m });
+        }
+
+        // 4. Descargar el sticker que quieres borrar
+        const stream = await downloadContentFromMessage(quoted.stickerMessage, 'image');
+        let buffer = Buffer.from([]);
+        for await (const chunk of stream) { buffer = Buffer.concat([buffer, chunk]); }
+        
+        if (!buffer || buffer.length === 0) return sock.sendMessage(from, { text: '❌ No pude procesar el sticker para borrarlo.' });
+
+        // 5. Convertir a Base64 para compararlo con los de la DB
+        const base64ToDelete = buffer.toString('base64');
+
+        // 6. ACTUALIZAR EN MONGODB (Usamos $pull para sacarlo del array)
+        // Buscamos el sticker que coincida con el base64 exacto
+        const result = await Pack.updateOne(
+            { owner: m.sender, name: packName },
+            { 
+                $pull: { stickers: { base64: base64ToDelete } }, // Si guardaste objetos
+                // $pull: { stickers: base64ToDelete }, // Usa esto si solo guardaste el string directo
+                $set: { lastModified: new Date() }
+            }
+        );
+
+        // 7. Verificar si se borró algo
+        if (result.modifiedCount === 0) {
+            return sock.sendMessage(from, { text: '《✧》Ese sticker no parece estar en este paquete, pariente.' }, { quoted: m });
+        }
+
+        // 8. Confirmación estilo Charly ❀
+        const successMsg = `❀ *STICKER ELIMINADO* ❀\n\n` +
+                           `> 📦 *Pack:* \`${packName}\` \n` +
+                           `> ✅ *Estado:* Sticker removido con éxito.\n\n` +
+                           `_Usa ${prefix}getpack ${packName} para ver cómo quedó._`;
+
+        await sock.sendMessage(from, { text: successMsg }, { quoted: m });
+
+    } catch (e) {
+        console.error("Error en delsticker:", e);
+        sock.sendMessage(from, { text: `> ❌ ¡Hubo un fallo al borrar!: [${e.message}]` }, { quoted: m });
     }
 }
 break;
 
 
-case 'getpack': {
+case 'getpack': case 'pack': case 'stickerpack': {
     try {
         const args = text.trim().split(/\s+/);
         const packName = args.slice(1).join(' ').trim();
         
-        if (!packName) return sock.sendMessage(from, { text: `❌ ¿Qué paquete quieres ver?\n\n> Ejemplo: *${prefix}getpack mi pack*` }, { quoted: m });
+        if (!packName) return sock.sendMessage(from, { text: `❌ ¿Qué paquete quieres, pariente?\n\n> Ejemplo: *${prefix}getpack mis stickers*` }, { quoted: m });
 
-        // Buscamos el paquete en la base de datos
-        const pack = await Pack.findOne({ name: packName });
-        
-        if (!pack || !pack.stickers || pack.stickers.length === 0) {
-            return sock.sendMessage(from, { text: `❌ El paquete \`${packName}\` no existe o no tiene stickers guardados.` });
+        // 1. BUSCAR EN MONGODB
+        // Buscamos si es tuyo O si es un pack público de alguien más
+        let pack = await Pack.findOne({ 
+            $or: [
+                { owner: m.sender, name: packName },
+                { name: packName, isPublic: true }
+            ]
+        });
+
+        if (!pack) return sock.sendMessage(from, { text: '❌ No encontré ese paquete o es privado, compa.' }, { quoted: m });
+
+        if (!pack.stickers || pack.stickers.length === 0) {
+            return sock.sendMessage(from, { text: `❌ El paquete \`${packName}\` está vacío.` }, { quoted: m });
         }
 
-        const getpackText = `❀ *PAQUETE: ${packName}* ❀\n\n> 📂 Stickers encontrados: *${pack.stickers.length}*\n\n_Enviando colección completa..._`;
+        await m.react('⏳');
 
-        // 1. Mandamos el mensaje con la tarjetita pro
-        await sock.sendMessage(from, {
-            text: getpackText,
-            contextInfo: {
-                externalAdReply: {
-                    title: `📦 Pack: ${packName}`,
-                    body: `Charly-Bot Maestro V2`,
-                    thumbnailUrl: 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png', 
-                    sourceUrl: 'https://wa.me/524991213571', 
-                    mediaType: 1,
-                    renderLargerThumbnail: true,
-                    showAdAttribution: false 
-                }
+        // 2. CONVERTIR BASE64 A BUFFERS VÁLIDOS
+        const validStickers = pack.stickers.map(s => {
+            try {
+                // Si guardaste el sticker como objeto con propiedad 'base64'
+                return Buffer.from(s.base64 || s, 'base64');
+            } catch (e) {
+                return null;
             }
+        }).filter(b => b && b.length > 0);
+
+        if (validStickers.length === 0) return sock.sendMessage(from, { text: '❌ Los stickers de este pack están corruptos.' });
+
+        // 3. PREPARAR METADATOS (EXIF)
+        const webp = await import('node-webpmux');
+        const MAX_STICKERS = 50; // Límite de WhatsApp
+        const selected = validStickers.slice(0, MAX_STICKERS);
+
+        const stickerResults = await Promise.all(selected.map(async (buffer) => {
+            try {
+                const img = new webp.default.Image();
+                await img.load(buffer);
+                
+                const json = { 
+                    'sticker-pack-id': `CharlyBot-${pack.id}`, 
+                    'sticker-pack-name': pack.name, 
+                    'sticker-pack-publisher': pack.author || 'Charly-Bot 😎', 
+                    emojis: ['🎭'] 
+                };
+
+                const exifAttr = Buffer.from([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, 0x01, 0x00, 0x41, 0x57, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0x00, 0x00, 0x00]);
+                const jsonBuff = Buffer.from(JSON.stringify(json), 'utf-8');
+                const exif = Buffer.concat([exifAttr, jsonBuff]);
+                exif.writeUIntLE(jsonBuff.length, 14, 4);
+                img.exif = exif;
+
+                // Crear buffer final con metadatos
+                return await img.save(null); 
+            } catch {
+                return buffer; // Si falla el meta, mandamos el original
+            }
+        }));
+
+        // 4. ENVIAR EL PAQUETE COMPLETO
+        await sock.sendMessage(from, { 
+            stickerPack: { 
+                name: pack.name, 
+                publisher: pack.author, 
+                description: pack.desc, 
+                cover: stickerResults[0], 
+                stickers: stickerResults.map(s => ({ sticker: s }))
+            } 
         }, { quoted: m });
 
-        // 2. ¡LA CLAVE! Ciclo para mandar TODOS los stickers del pack
-        for (let sticker of pack.stickers) {
-            // Si guardaste el sticker como buffer o link en 'url'
-            if (sticker.url) {
-                await sock.sendMessage(from, { sticker: { url: sticker.url } });
-            } else if (sticker.buffer) {
-                await sock.sendMessage(from, { sticker: sticker.buffer });
-            }
-            // Pequeño delay para que WhatsApp no te banee por mandar muchos de golpe
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
+        await m.react('✔️');
 
     } catch (e) {
         console.error("Error en getpack:", e);
-        sock.sendMessage(from, { text: '❌ Hubo un error al recuperar los stickers.' });
+        await m.react('✖️');
+        sock.sendMessage(from, { text: `> ❌ Error: [${e.message}]` }, { quoted: m });
     }
 }
 break;
 
-case 'setpack': {
+case 'setpackpublic': case 'setpackpub': case 'packpublic': {
     try {
-        const text = m.text || m.caption || ""; // Parche de seguridad contra el error del split
-        const args = text.split(' ');
-        const packName = args[1];
-        const status = args[2]; // 'on' (público) o 'off' (privado)
+        // 1. Sacamos el nombre del pack
+        const args = text.trim().split(/\s+/);
+        const packName = args.slice(1).join(' ').trim();
 
-        if (!packName || !['on', 'off'].includes(status)) {
-            return sock.sendMessage(from, { text: '❌ Uso: #setpack [nombre] [on/off]' }, { quoted: m });
+        if (!packName) return sock.sendMessage(from, { text: `❌ Especifica el nombre del paquete, pariente.\n\n> Ejemplo: *${prefix}setpackpublic mis stickers*` }, { quoted: m });
+
+        // 2. Buscamos el paquete en MongoDB (Solo los que tú creaste)
+        const pack = await Pack.findOne({ owner: m.sender, name: packName });
+
+        if (!pack) {
+            return sock.sendMessage(from, { text: `❌ No encontré un paquete llamado \`${packName}\` en tu cuenta.` }, { quoted: m });
         }
 
-        const isPublic = status === 'on';
+        // 3. Revisamos si ya era público para no hacer doble jale
+        if (pack.isPublic === true) {
+            return sock.sendMessage(from, { text: `《✧》El paquete \`${pack.name}\` ya es público, compa.` }, { quoted: m });
+        }
 
-        // Usamos el modelo Pack de Mongoose con isPublic
-        const result = await Pack.updateOne(
+        // 4. ACTUALIZAMOS EN MONGODB
+        // Cambiamos isPublic a true
+        await Pack.updateOne(
             { owner: m.sender, name: packName },
-            { $set: { isPublic: isPublic } }
+            { 
+                $set: { 
+                    isPublic: true,
+                    lastModified: new Date() 
+                } 
+            }
         );
 
-        if (result.matchedCount === 0) {
-            return sock.sendMessage(from, { text: `❌ No se encontró el paquete \`${packName}\` en tu cuenta.` });
-        }
+        // 5. Confirmación con estilo ❀
+        const successMsg = `❀ *PACK AHORA ES PÚBLICO* ❀\n\n` +
+                           `> 📦 *Pack:* \`${pack.name}\` \n` +
+                           `> 🌍 *Estado:* Visible para todos\n\n` +
+                           `_Ahora cualquiera puede usar ${prefix}getpack ${pack.name}_`;
 
-        const publicText = `❀ La visibilidad del paquete \`${packName}\` ha cambiado!\n\n> Ahora el estado del pack es: *${isPublic ? 'PÚBLICO 🌍' : 'PRIVADO 🔒'}*`;
-        
-        await sock.sendMessage(from, { text: publicText }, { quoted: m });
+        await sock.sendMessage(from, { text: successMsg }, { quoted: m });
 
     } catch (e) {
-        console.error(e);
-        sock.sendMessage(from, { text: '❌ Hubo un error al cambiar la privacidad del paquete.' });
+        console.error("Error en setpackpublic:", e);
+        sock.sendMessage(from, { text: `> ❌ Error en la base de datos: [${e.message}]` }, { quoted: m });
+    }
+}
+break;
+
+
+case 'setpackprivate': case 'setpackpriv': case 'packprivate': {
+    try {
+        // 1. Sacamos el nombre del pack de la variable 'text'
+        const args = text.trim().split(/\s+/);
+        const packName = args.slice(1).join(' ').trim();
+
+        if (!packName) return sock.sendMessage(from, { text: `❌ Especifica el nombre del paquete, pariente.\n\n> Ejemplo: *${prefix}setpackprivate mis stickers*` }, { quoted: m });
+
+        // 2. Buscamos el paquete en MongoDB (Solo donde tú eres el dueño)
+        const pack = await Pack.findOne({ owner: m.sender, name: packName });
+
+        if (!pack) {
+            return sock.sendMessage(from, { text: `❌ No encontré un paquete llamado \`${packName}\` en tu cuenta.` }, { quoted: m });
+        }
+
+        // 3. Revisamos si ya estaba en privado (spackpublic === 0 o isPublic === false)
+        if (pack.isPublic === false) {
+            return sock.sendMessage(from, { text: `《✧》El paquete \`${pack.name}\` ya es privado, compa.` }, { quoted: m });
+        }
+
+        // 4. ACTUALIZAMOS EN MONGODB
+        // Cambiamos isPublic a false
+        await Pack.updateOne(
+            { owner: m.sender, name: packName },
+            { 
+                $set: { 
+                    isPublic: false,
+                    lastModified: new Date() 
+                } 
+            }
+        );
+
+        // 5. Confirmación estilo Charly ❀
+        const successMsg = `❀ *PACK AHORA ES PRIVADO* ❀\n\n` +
+                           `> 📦 *Pack:* \`${pack.name}\` \n` +
+                           `> 🔒 *Estado:* Solo tú puedes verlo\n\n` +
+                           `_Nadie más podrá usar ${prefix}getpack con este nombre._`;
+
+        await sock.sendMessage(from, { text: successMsg }, { quoted: m });
+
+    } catch (e) {
+        console.error("Error en setpackprivate:", e);
+        sock.sendMessage(from, { text: `> ❌ Error en la base de datos: [${e.message}]` }, { quoted: m });
+    }
+}
+break;
+
+case 'setpackname': case 'setstickerpackname': case 'packname': {
+    try {
+        // 1. Validar que vengan argumentos
+        if (!text.includes('|') && !text.includes('•') && !text.includes('/')) {
+            return sock.sendMessage(from, { 
+                text: `《✧》Especifica el nombre actual y el nuevo, pariente.\n> Ejemplo: *${prefix}${command} PackViejo | PackNuevo*` 
+            }, { quoted: m });
+        }
+
+        // 2. Separar los nombres usando los divisores
+        const parts = text.split(/\||•|\//);
+        const oldName = parts[0].replace(new RegExp(prefix + command, 'i'), '').trim();
+        const newName = parts[1]?.trim();
+
+        if (!oldName || !newName) {
+            return sock.sendMessage(from, { text: '❌ No pusiste bien los nombres, compa. Usa el separador |' }, { quoted: m });
+        }
+
+        // 3. Validaciones de longitud del nuevo nombre
+        if (newName.length < 2 || newName.length > 64) {
+            return sock.sendMessage(from, { text: '《✧》El nuevo nombre debe tener entre 2 y 64 caracteres.' }, { quoted: m });
+        }
+
+        // 4. Revisar si el nombre NUEVO ya existe para no encimarlos
+        const nameCheck = await Pack.findOne({ owner: m.sender, name: newName });
+        if (nameCheck) {
+            return sock.sendMessage(from, { text: `❌ Ya tienes otro paquete que se llama \`${newName}\`.` }, { quoted: m });
+        }
+
+        // 5. BUSCAR Y ACTUALIZAR EN MONGODB
+        const result = await Pack.updateOne(
+            { owner: m.sender, name: oldName },
+            { 
+                $set: { 
+                    name: newName,
+                    lastModified: new Date() 
+                } 
+            }
+        );
+
+        // 6. Verificar si se encontró el paquete original
+        if (result.matchedCount === 0) {
+            return sock.sendMessage(from, { text: `❌ No encontré ningún paquete tuyo llamado \`${oldName}\`.` }, { quoted: m });
+        }
+
+        // 7. Confirmación final ❀
+        const successMsg = `❀ *NOMBRE ACTUALIZADO* ❀\n\n` +
+                           `> 📁 *Antes:* \`${oldName}\` \n` +
+                           `> ✨ *Ahora:* \`${newName}\` \n\n` +
+                           `_Ya puedes usar ${prefix}getpack ${newName}_`;
+
+        await sock.sendMessage(from, { text: successMsg }, { quoted: m });
+
+    } catch (e) {
+        console.error("Error en setpackname:", e);
+        sock.sendMessage(from, { text: `> ❌ Error en la base de datos: [${e.message}]` }, { quoted: m });
+    }
+}
+break;
+
+
+case 'setpackdesc': case 'setstickerpackdesc': case 'packdesc': {
+    try {
+        // 1. Validamos que use los separadores para dividir Nombre | Descripción
+        if (!text.includes('|') && !text.includes('•') && !text.includes('/')) {
+            return sock.sendMessage(from, { 
+                text: `《✧》Especifica el nombre del pack y la descripción, compa.\n> Ejemplo: *${prefix}${command} MiPack | Nueva descripción perrona*` 
+            }, { quoted: m });
+        }
+
+        // 2. Separar los datos
+        const parts = text.split(/\||•|\//);
+        // Quitamos el nombre del comando del primer pedazo
+        const packName = parts[0].replace(new RegExp(prefix + command, 'i'), '').trim();
+        const newDesc = parts[1]?.trim();
+
+        if (!packName || !newDesc) {
+            return sock.sendMessage(from, { text: '❌ Te faltó el nombre del pack o la descripción, pariente.' }, { quoted: m });
+        }
+
+        // 3. Validación de longitud (60 caracteres es lo ideal para WhatsApp)
+        if (newDesc.length > 60) {
+            return sock.sendMessage(from, { text: '《✧》La descripción está muy larga, máximo 60 letras.' }, { quoted: m });
+        }
+
+        // 4. ACTUALIZAR EN MONGODB
+        const result = await Pack.updateOne(
+            { owner: m.sender, name: packName },
+            { 
+                $set: { 
+                    desc: newDesc,
+                    lastModified: new Date() 
+                } 
+            }
+        );
+
+        // 5. Verificar si el pack existía
+        if (result.matchedCount === 0) {
+            return sock.sendMessage(from, { text: `❌ No encontré ningún paquete tuyo llamado \`${packName}\`.` }, { quoted: m });
+        }
+
+        // 6. Confirmación final ❀
+        const successMsg = `❀ *DESCRIPCIÓN ACTUALIZADA* ❀\n\n` +
+                           `> 📦 *Pack:* \`${packName}\` \n` +
+                           `> 📝 *Nueva Desc:* ${newDesc}\n\n` +
+                           `_Ahora tu pack se ve más pro cuando lo compartes._`;
+
+        await sock.sendMessage(from, { text: successMsg }, { quoted: m });
+
+    } catch (e) {
+        console.error("Error en setpackdesc:", e);
+        sock.sendMessage(from, { text: `> ❌ Error en la base de datos: [${e.message}]` }, { quoted: m });
+    }
+}
+break;
+
+
+case 'setstickermeta': case 'setmeta': {
+    try {
+        // 1. Validar que el usuario mandó algo
+        const args = text.trim().split(/\s+/);
+        const fullArgs = args.slice(1).join(' ');
+
+        if (!fullArgs) {
+            return sock.sendMessage(from, { 
+                text: `《✧》Ingresa los metadatos, pariente.\n> Ejemplo: *${prefix}${command} MiPack | CharlyBot*` 
+            }, { quoted: m });
+        }
+
+        // 2. Separar usando | • o /
+        const separatorIndex = fullArgs.search(/[|•\/]/);
+        let meta1, meta2;
+
+        if (separatorIndex === -1) {
+            meta1 = fullArgs.trim();
+            meta2 = '';
+        } else {
+            meta1 = fullArgs.slice(0, separatorIndex).trim();
+            meta2 = fullArgs.slice(separatorIndex + 1).trim();
+        }
+
+        if (!meta1) return sock.sendMessage(from, { text: '❌ El nombre del pack no puede estar vacío.' }, { quoted: m });
+
+        // 3. GUARDAR EN MONGODB (En la colección de Usuarios)
+        // Usamos el modelo de Usuario que ya deberías tener para guardar tus configs
+        // Si no tienes uno, lo ideal es usar: await User.updateOne(...)
+        await User.updateOne(
+            { id: m.sender }, 
+            { 
+                $set: { 
+                    metadatos: meta1, 
+                    metadatos2: meta2 
+                } 
+            },
+            { upsert: true } // Esto lo crea si no existe el usuario en la DB
+        );
+
+        // 4. Confirmación con estilo ❀
+        const successMsg = `❀ *METADATOS ACTUALIZADOS* ❀\n\n` +
+                           `> 📦 *Pack Name:* ${meta1}\n` +
+                           `> ✍️ *Autor:* ${meta2 || 'Sin autor'}\n\n` +
+                           `_Ahora tus stickers llevarán esta firma en MongoDB._`;
+
+        await sock.sendMessage(from, { text: successMsg }, { quoted: m });
+
+    } catch (e) {
+        console.error("Error en setmeta:", e);
+        sock.sendMessage(from, { text: `> ❌ Error en la base de datos: [${e.message}]` }, { quoted: m });
     }
 }
 break;
@@ -2137,85 +2533,181 @@ case 'menu': {
 > ✨ *SISTEMA DE COMANDOS* ✨
 
 《✧》 *INTELIGENCIA ARTIFICIAL*
+
 ◈ \`.copilot\`
+> _Consulta a la IA de Microsoft para código y tareas_ 💻
+
 ◈ \`.ia\`
+> _Chat general con la IA principal del Bot_ 🧠
+
 ◈ \`.gemini\`
+> _Habla con la Inteligencia Artificial de Google_ ♊
+
 ◈ \`.llama\`
-◈ \`.brat\`
-◈ \`.letra\`
-◈ \`.lyrics\`
+> _Interactúa con el modelo Llama 3 de Meta (Groq)_ 🦙
+
+◈ \`.flux\`
+> _Genera imágenes realistas con Inteligencia Artificial_ 🎨
+
+◈ \`.letra\` / \`.lyrics\`
+> _Busca la letra de cualquier canción al instante_ 🎶
+
+《✧》 *ASISTENCIA & TAREAS* ❀
+
+◈ \`.responde\`
+> _Resuelve tareas o trabajos (Responde a una foto)_ 📖
+
+◈ \`.ayuda\`
+> _Pide ayuda con cualquier problema (Responde a una foto)_ 🆘
 
 《✧》 *MULTIMEDIA & DOWNLOAD*
 ◈ \`.audio\`
+> _Busca y descarga música de YouTube (MP3)_ 🎵
+
 ◈ \`.vocal\`
+> _Extrae solo la voz de cualquier canción_ 🎤
+
 ◈ \`.separate\`
+> _Separa la música de la voz (Instrumental)_ 🎸
+
 ◈ \`.video\`
+> _Descarga videos de YouTube en MP4_ 🎥
+
 ◈ \`.album\`
+> _Descarga un álbum completo o varios temas_ 🗂️
+
 ◈ \`.tt\`
+> _Descarga videos de TikTok sin marca de agua_ 📱
+
 ◈ \`.playlist\`
+> _Descarga listas enteras de Spotify _ 🟢
+
 ◈ \`.ytaudio\`
+> _Descarga audio directo de YT_ 🔗
+
 ◈ \`.ytvideo\`
+> _Descarga video directo de YT_ 🎞️
 
 《✧》 *STICKERS & PACKS* ❀
-◈ \`.s\` 
-◈ \`.sticker\`
-◈ \`#newpack\`
-◈ \`#addsticker\`
-◈ \`#delmeta\`
-◈ \`#getpack\`
-◈ \`#setpack\`
+
+◈  ¿\`.s\` / \`.sticker\`
+> _Crea un sticker normal al instante_ 🎭
+
+◈ \`.brat\`
+> _Genera sticker con el estilo de diseño "Brat"_ 🟢
+
+◈ \`.newpack\`
+> _Crea un nuevo paquete en la base de datos_ 📦
+
+◈ \`.addsticker\`
+> _Añade el sticker que respondas a tu pack_ ➕
+
+◈ \`.getpack\`
+> _Descarga tu paquete completo de stickers_ 📥
+
+◈ \`.delsticker\`
+> _Borra un sticker específico de tu paquete_ 🗑️
+
+◈ \`.delpack\`
+> _Elimina un paquete completo de la nube_ ❌
+
+◈ \`.packname\`
+> _Renombra tu paquete (Usa: Viejo | Nuevo)_ ✏️
+
+◈ \`.packdesc\`
+> _Cambia la descripción de tu colección_ 📝
+
+◈ \`.setpackpub\`
+> _Haz que todos puedan ver tu paquete_ 🌍
+
+◈ \`.setpackpriv\`
+> _Vuelve tu paquete privado (Solo para ti)_ 🔒
+
+◈ \`.setmeta\`
+> _Personaliza tu firma (Pack | Autor)_ ✍️
+
+◈ \`.delmeta\`
+> _Borra tu firma y usa la del Bot_ 🗑️
 
 《✧》 *ENTRETENIMIENTO*
+
 ◈ \`.kiss\`
+> _Dale un beso a alguien_ 💋
+
 ◈ \`.slap\`
+> _Dale una cachetada a ese compa_ 👊
+
 ◈ \`.hug\`
+> _Dale un abrazo a un pariente_ 🫂
+
 ◈ \`.kill\`
+> _Elimina a alguien del mapa_ 💀
+
 ◈ \`.translate\`
+> _Traduce un texto en corto_ ✍️
+
 ◈ \`.nsfwmenu\`
+> _Menú prohibido 🔞_
 
 《✧》 *ADMINISTRACIÓN*
 ◈ \`.tag\`
+> _Menciona a todos los plebes del grupo_ 📢
+
 ◈ \`.kick\`
+> _Saca a alguien del grupo por mal portado_ 🦶
+
 ◈ \`.add\`
+> _Añade a un nuevo integrante al equipo_ ➕
+
 ◈ \`.del\`
+> _Borra el mensaje de cualquier persona_ 🗑️
+
 ◈ \`.promote\`
+> _Dale el cargo de Admin a un pariente_ ⭐
+
 ◈ \`.demote\`
+> _Quítale el Admin a quien ya no lo ocupe_ 📉
+
 ◈ \`.open\`
+> _Abre el grupo para que todos platiquen_ 🔓
+
 ◈ \`.close\`
+> _Cierra el grupo (Solo Admins escriben)_ 🔒
+
 ◈ \`.antilink on/off\`
+> _Activa o desactiva la protección de links_ 🛡️
 
 《✧》 *ECONOMÍA & PERFIL*
 ◈ \`.profile\`
+> _Mira tu tarjeta de identidad y nivel_ 🪪
+
 ◈ \`.menuperfil\`
+> _Abre el panel de configuración de tu cuenta_ ⚙️
+
 ◈ \`.work\`
+> _Chambea un rato para ganar unas monedas_ ⚒️
+
 ◈ \`.rob\`
+> _Intenta tumbarle una lana a otro pariente_ 💸
 
 《✧》 *SISTEMA & CONFIG*
 ◈ \`.p\`
+> _Revisa la velocidad de respuesta del Bot (Ping)_ ⚡
+
 ◈ \`.reload\`
+> _Reinicia los comandos para aplicar cambios nuevos_ 🔄
 
 > ❀ *By Charly Pelón 😎*
 > *charly el mejor*`;
 
-        await sock.sendMessage(from, { 
+ await sock.sendMessage(from, { 
             image: { url: imagenMenu }, 
-            caption: menuCaption,
-            contextInfo: {
-                forwardingScore: 999,
-                isForwarded: true,
-                externalAdReply: {
-                    title: "❀ Charly-Bot Maestro V2 ❀",
-                    body: "Online | Sistema de Automatización",
-                    thumbnailUrl: imagenMenu,
-                    mediaType: 1,
-                    renderLargerThumbnail: false
-                }
-            }
+            caption: menuCaption 
         }, { quoted: m });
 
     } catch (e) {
         console.error("Error en el menú:", e);
-        sock.sendMessage(from, { text: "❌ Error al enviar el menú." });
+        sock.sendMessage(from, { text: "❌ Error al enviar el menú con imagen." });
     }
 }
 break;
