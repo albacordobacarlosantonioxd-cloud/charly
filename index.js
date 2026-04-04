@@ -1971,18 +1971,17 @@ break;
 case 'addsticker': case 'stickeradd': {
     try {
         let packName = text.replace(command, '').replace(prefix, '').trim();
-        
-        if (!packName) {
-            return sock.sendMessage(from, { 
-                text: `《✧》 *ERROR* ❀\n\n◈ _Falta el nombre del paquete, pariente._\n◈ _Ejemplo: *${prefix + command} mi pack*_` 
-            }, { quoted: m });
-        }
+        if (!packName) return sock.sendMessage(from, { text: `《✧》 *ERROR* ❀\n\n◈ _Falta el nombre del paquete, pariente._` }, { quoted: m });
 
+        // --- DETECTOR MEJORADO ---
+        // Buscamos el sticker en el mensaje citado o en el principal
         const q = m.quoted ? m.quoted : m;
-        const mime = (q.msg || q).mimetype || q.mediaType || '';
-        const isSticker = /sticker/.test(mime) || q.stickerMessage;
+        const mime = (q.msg || q).mimetype || '';
+        
+        // Esta línea es la clave: busca por tipo de mensaje o por mimetype
+        const esSticker = m.type === 'stickerMessage' || m.msg?.stickerMessage || q.stickerMessage || /sticker/.test(mime);
 
-        if (!isSticker) {
+        if (!esSticker) {
             return sock.sendMessage(from, { 
                 text: `《✧》 *SISTEMA* ❀\n\n◈ _Responde a un *Sticker* para guardarlo en la nube._` 
             }, { quoted: m });
@@ -1991,38 +1990,31 @@ case 'addsticker': case 'stickeradd': {
         const creator = m.sender || m.key.participant;
         const pack = await Pack.findOne({ owner: creator, name: packName });
         
-        if (!pack) {
-            return sock.sendMessage(from, { 
-                text: `《✧》 *ARCHIVO* ❀\n\n◈ _No hallé el pack \`${packName}\`._\n◈ _Usa: *${prefix}newpack ${packName}*_` 
-            }, { quoted: m });
-        }
+        if (!pack) return sock.sendMessage(from, { text: `《✧》 *ARCHIVO* ❀\n\n◈ _No hallé el pack \`${packName}\`._` }, { quoted: m });
 
         await sock.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-        const buffer = await q.download?.();
-        if (!buffer) return sock.sendMessage(from, { text: '◈ _Error al procesar archivo._' }, { quoted: m });
+        // Intentamos descargar con varias rutas por si una falla
+        const buffer = await q.download?.() || await m.quoted?.download?.();
+        
+        if (!buffer) {
+            await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
+            return sock.sendMessage(from, { text: '◈ _Error al descargar el sticker._' }, { quoted: m });
+        }
 
         const base64Sticker = buffer.toString('base64');
-
         const isDuplicate = pack.stickers.some(s => s.base64 === base64Sticker);
+        
         if (isDuplicate) {
             await sock.sendMessage(from, { react: { text: '⚠️', key: m.key } });
             return sock.sendMessage(from, { text: `◈ _Ese sticker ya existe en \`${packName}\`._` }, { quoted: m });
         }
 
-        pack.stickers.push({
-            base64: base64Sticker,
-            createdAt: new Date()
-        });
-
+        pack.stickers.push({ base64: base64Sticker, createdAt: new Date() });
         await pack.save();
 
         await sock.sendMessage(from, { react: { text: '✅', key: m.key } });
-
-        const successMsg = `❀ *STICKER GUARDADO* ❀\n\n` +
-                           `《✧》 *INFO* ❀\n` +
-                           `◈ *Pack:* \`${packName}\` \n` +
-                           `◈ *Total:* ${pack.stickers.length} / 50 📊\n\n`;
+        const successMsg = `❀ *STICKER GUARDADO* ❀\n\n《✧》 *INFO* ❀\n◈ *Pack:* \`${packName}\` \n◈ *Total:* ${pack.stickers.length} / 50 📊\n\n> *By Charly-Bot | HOT ON* 💎`;
 
         await sock.sendMessage(from, { text: successMsg }, { quoted: m });
 
