@@ -147,6 +147,22 @@ onlyAdmin: { type: Boolean, default: false }, // Lo que hicimos hace rato
 
 const Group = mongoose.model('Group', GroupSchema);
 
+// --- 3. NUEVO: MODELO DE PAQUETES DE STICKERS (❀ Estilos Brat) ---
+const PackSchema = new mongoose.Schema({
+    owner: { type: String, required: true }, // JID del creador (tú)
+    name: { type: String, required: true },  // Nombre del pack (ej: estilos brat)
+    author: { type: String, default: 'Charly-Bot' }, // El autor que sale en el sticker
+    isPublic: { type: Boolean, default: false }, // Para el comando #setpack
+    stickers: [{
+        url: String,        // Link donde se subió el sticker (Stellar/Catbox)
+        fileSha256: String, // Para poder borrarlo con #delmeta
+        createdAt: { type: Date, default: Date.now }
+    }]
+});
+
+// Definimos el modelo Pack
+const Pack = mongoose.model('Pack', PackSchema);
+
 global.proposals = {};
 
 // 3. Conexión a la base de datos
@@ -1813,35 +1829,48 @@ break;
 ///////
 
 case 'newpack': {
-    const packName = m.text.split(' ').slice(1).join(' ');
-    if (!packName) return sock.sendMessage(from, { text: '❌ Ponle un nombre al paquete.' });
+    const text = m.text || m.caption || ""; // Seguridad contra el error de ayer
+    const packName = text.split(' ').slice(1).join(' ');
+    
+    if (!packName) return sock.sendMessage(from, { text: '❌ Ponle un nombre al paquete. Ej: #newpack estilos brat' });
 
-    // Guardar en MongoDB (opcional, para control)
-    await db.collection('packs').updateOne(
-        { owner: m.sender, name: packName },
-        { $set: { createdAt: new Date(), public: false } },
-        { upsert: true }
-    );
+    try {
+        // Usamos el modelo Pack de Mongoose que definimos hace rato
+        await Pack.updateOne(
+            { owner: m.sender, name: packName },
+            { 
+                $setOnInsert: { // Solo pone estos datos si el pack es NUEVO
+                    createdAt: new Date(), 
+                    isPublic: false,
+                    stickers: [] 
+                } 
+            },
+            { upsert: true }
+        );
 
-    // La respuesta con el diseño que quieres
-    const responseText = `❀ El paquete de stickers \`${packName}\` ha sido creado exitosamente!\n\n> Puedes agregar stickers a este paquete respondiendo a un sticker con *#addsticker ${packName}*`;
+        const responseText = `❀ El paquete de stickers \`${packName}\` ha sido creado exitosamente!\n\n> Puedes agregar stickers a este paquete respondiendo a un sticker con *#addsticker ${packName}*`;
 
-    await sock.sendMessage(from, { text: responseText }, { quoted: m });
+        await sock.sendMessage(from, { text: responseText }, { quoted: m });
+
+    } catch (e) {
+        console.error(e);
+        sock.sendMessage(from, { text: '❌ Hubo un error al guardar el paquete en la base de datos.' });
+    }
 }
 break;
 
 case 'addsticker': {
     try {
-        const packName = m.text.split(' ').slice(1).join(' ');
+        const text = m.text || m.caption || ""; // Parche para el error del split
+        const packName = text.split(' ').slice(1).join(' ');
         const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
         
-        // Verificamos si es imagen, sticker o video
         const isImage = m.message.imageMessage || quoted?.imageMessage;
         const isSticker = quoted?.stickerMessage;
         const isVideo = m.message.videoMessage || quoted?.videoMessage;
 
         if (!packName) return sock.sendMessage(from, { text: '❌ Indica a qué paquete lo quieres agregar.' });
-        if (!isImage && !isSticker && !isVideo) return sock.sendMessage(from, { text: '❌ Responde a una imagen o sticker para agregarlo al paquete.' });
+        if (!isImage && !isSticker && !isVideo) return sock.sendMessage(from, { text: '❌ Responde a una imagen o sticker para agregarlo.' });
 
         // 1. Descargar el contenido
         let type = isImage ? 'image' : (isSticker ? 'sticker' : 'video');
@@ -1851,7 +1880,7 @@ case 'addsticker': {
         let buffer = Buffer.from([]);
         for await (const chunk of stream) { buffer = Buffer.concat([buffer, chunk]); }
 
-        // 2. Crear Sticker con tus Metadatos Estilo "estilos brat"
+        // 2. Crear Sticker con tus Metadatos
         const sticker = new Sticker(buffer, {
             pack: packName,              
             author: 'Charly Pelón 😎',    
@@ -1861,7 +1890,22 @@ case 'addsticker': {
 
         const stickerBuffer = await sticker.toBuffer();
 
-        // 3. Enviar el sticker generado
+        // --- NUEVO: GUARDAR EN MONGODB ---
+        // Aquí podrías subir el buffer a un hosting (Catbox/Telegraph) y guardar la URL.
+        // Por ahora lo registramos en el pack para que el bot sepa que existe.
+        await Pack.updateOne(
+            { owner: m.sender, name: packName },
+            { 
+                $push: { 
+                    stickers: { 
+                        fileSha256: quoted?.stickerMessage?.fileSha256 || "temp-id-" + Date.now(),
+                        createdAt: new Date()
+                    } 
+                } 
+            }
+        );
+
+        // 3. Enviar el sticker
         await sock.sendMessage(from, { sticker: stickerBuffer }, { quoted: m });
 
         // 4. Confirmación con tu nuevo estilo ❀
@@ -1877,77 +1921,112 @@ case 'addsticker': {
 break;
 
 case 'delmeta': {
-    const packName = m.text.split(' ').slice(1).join(' ');
-    const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
-    
-    if (!packName) return sock.sendMessage(from, { text: '❌ Indica el nombre del paquete.' });
-    if (!quoted?.stickerMessage) return sock.sendMessage(from, { text: '❌ Responde al sticker que quieres eliminar del pack.' });
+    try {
+        const text = m.text || m.caption || ""; // Parche de seguridad
+        const packName = text.split(' ').slice(1).join(' ');
+        const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
+        
+        if (!packName) return sock.sendMessage(from, { text: '❌ Indica el nombre del paquete.' });
+        if (!quoted?.stickerMessage) return sock.sendMessage(from, { text: '❌ Responde al sticker que quieres eliminar del pack.' });
 
-    // Borramos de la DB usando el hash único del sticker
-    const result = await db.collection('packs').updateOne(
-        { owner: m.sender, name: packName },
-        { $pull: { stickers: { fileSha256: quoted.stickerMessage.fileSha256 } } } 
-    );
+        // Usamos el modelo Pack de Mongoose con $pull para sacar el sticker del array
+        const result = await Pack.updateOne(
+            { owner: m.sender, name: packName },
+            { $pull: { stickers: { fileSha256: quoted.stickerMessage.fileSha256 } } } 
+        );
 
-    const delmetaText = `❀ El sticker ha sido eliminado del paquete \`${packName}\` exitosamente!\n\n> El espacio en el pack ha sido liberado.`;
-    
-    await sock.sendMessage(from, { text: delmetaText }, { quoted: m });
+        if (result.modifiedCount === 0) {
+            return sock.sendMessage(from, { text: `❌ No se encontró ese sticker en el paquete \`${packName}\`.` });
+        }
+
+        const delmetaText = `❀ El sticker ha sido eliminado del paquete \`${packName}\` exitosamente!\n\n> El espacio en el pack ha sido liberado.`;
+        
+        await sock.sendMessage(from, { text: delmetaText }, { quoted: m });
+
+    } catch (e) {
+        console.error(e);
+        sock.sendMessage(from, { text: '❌ Hubo un error al intentar eliminar el sticker.' });
+    }
 }
 break;
 
 
 case 'getpack': {
-    const packName = m.text.split(' ').slice(1).join(' ');
-    if (!packName) return sock.sendMessage(from, { text: '❌ ¿Qué paquete quieres ver?' });
+    try {
+        const text = m.text || m.caption || ""; // Parche para evitar el error del split
+        const packName = text.split(' ').slice(1).join(' ');
+        
+        if (!packName) return sock.sendMessage(from, { text: '❌ ¿Qué paquete quieres ver?' });
 
-    const pack = await db.collection('packs').findOne({ name: packName });
-    if (!pack || !pack.stickers || pack.stickers.length === 0) {
-        return sock.sendMessage(from, { text: `❌ El paquete \`${packName}\` no existe o está vacío.` });
-    }
-
-    // Usamos el primer sticker del pack como "portada" para la tarjeta
-    const portadaSticker = pack.stickers[0].url;
-
-    const getpackText = `❀ Paquete \`${packName}\` encontrado!\n\n> Toca abajo para ver todos los stickers del pack.`;
-
-    await sock.sendMessage(from, {
-        text: getpackText,
-        contextInfo: {
-            externalAdReply: {
-                title: `${packName}`, // Nombre del pack
-                body: `Paquete de stickers creado por Charly Pelón 😎`, // Tu marca
-                thumbnailUrl: portadaSticker, // La imagen que sale en chiquito
-                sourceUrl: 'https://wa.me/524991213571', // Opcional: link a tu bot
-                mediaType: 1,
-                renderLargerThumbnail: false,
-                showAdAttribution: false 
-            }
+        // Buscamos el paquete usando el modelo Pack de Mongoose
+        const pack = await Pack.findOne({ name: packName });
+        
+        if (!pack || !pack.stickers || pack.stickers.length === 0) {
+            return sock.sendMessage(from, { text: `❌ El paquete \`${packName}\` no existe o está vacío.` });
         }
-    }, { quoted: m });
 
-    // OPCIONAL: Si de todos modos quieres que mande UNO para que lo vean
-    await sock.sendMessage(from, { sticker: { url: portadaSticker } });
+        // Usamos el primer sticker del pack como portada
+        // Si no tienes URL, puedes usar una imagen por defecto del bot
+        const portadaSticker = pack.stickers[0].url || 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png';
+
+        const getpackText = `❀ Paquete \`${packName}\` encontrado!\n\n> Toca abajo para ver todos los stickers del pack.`;
+
+        await sock.sendMessage(from, {
+            text: getpackText,
+            contextInfo: {
+                externalAdReply: {
+                    title: `📦 Pack: ${packName}`,
+                    body: `Creado por Charly Pelón 😎`,
+                    thumbnailUrl: portadaSticker, 
+                    sourceUrl: 'https://wa.me/524991213571', 
+                    mediaType: 1,
+                    renderLargerThumbnail: true, // Esto hace que la imagen se vea grande y pro
+                    showAdAttribution: false 
+                }
+            }
+        }, { quoted: m });
+
+        // Te manda el primer sticker del pack para que lo tengas a la mano
+        await sock.sendMessage(from, { sticker: { url: portadaSticker } });
+
+    } catch (e) {
+        console.error(e);
+        sock.sendMessage(from, { text: '❌ Hubo un error al buscar el paquete.' });
+    }
 }
 break;
 
 case 'setpack': {
-    const args = m.text.split(' ');
-    const packName = args[1];
-    const status = args[2]; // 'on' (público) o 'off' (privado)
+    try {
+        const text = m.text || m.caption || ""; // Parche de seguridad contra el error del split
+        const args = text.split(' ');
+        const packName = args[1];
+        const status = args[2]; // 'on' (público) o 'off' (privado)
 
-    if (!packName || !['on', 'off'].includes(status)) {
-        return sock.sendMessage(from, { text: '❌ Uso: #setpack [nombre] [on/off]' });
+        if (!packName || !['on', 'off'].includes(status)) {
+            return sock.sendMessage(from, { text: '❌ Uso: #setpack [nombre] [on/off]' }, { quoted: m });
+        }
+
+        const isPublic = status === 'on';
+
+        // Usamos el modelo Pack de Mongoose con isPublic
+        const result = await Pack.updateOne(
+            { owner: m.sender, name: packName },
+            { $set: { isPublic: isPublic } }
+        );
+
+        if (result.matchedCount === 0) {
+            return sock.sendMessage(from, { text: `❌ No se encontró el paquete \`${packName}\` en tu cuenta.` });
+        }
+
+        const publicText = `❀ La visibilidad del paquete \`${packName}\` ha cambiado!\n\n> Ahora el estado del pack es: *${isPublic ? 'PÚBLICO 🌍' : 'PRIVADO 🔒'}*`;
+        
+        await sock.sendMessage(from, { text: publicText }, { quoted: m });
+
+    } catch (e) {
+        console.error(e);
+        sock.sendMessage(from, { text: '❌ Hubo un error al cambiar la privacidad del paquete.' });
     }
-
-    const isPublic = status === 'on';
-    await db.collection('packs').updateOne(
-        { owner: m.sender, name: packName },
-        { $set: { public: isPublic } }
-    );
-
-    const publicText = `❀ La visibilidad del paquete \`${packName}\` ha cambiado!\n\n> Ahora el estado del pack es: *${isPublic ? 'PÚBLICO 🌍' : 'PRIVADO 🔒'}*`;
-    
-    await sock.sendMessage(from, { text: publicText }, { quoted: m });
 }
 break;
 
@@ -2020,7 +2099,7 @@ case 'menu': {
 ◈ \`.reload\`
 
 > ❀ *By Charly Pelón 😎*
-> *Miguel Auza, Zacatecas*`;
+> *charly el mejor*`;
 
         await sock.sendMessage(from, { 
             image: { url: imagenMenu }, 
