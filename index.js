@@ -1969,74 +1969,66 @@ try {
 break;
 
 case 'addsticker': case 'stickeradd': {
- try {
+    try {
         let packName = text.replace(command, '').replace(prefix, '').trim();
-        if (!packName) return m.reply(`《✧》¡Falta el nombre del paquete, compa!`);
-
-        // --- ESTA ES LA PARTE QUE VAMOS A REFORZAR ---
-        const q = m.quoted ? m.quoted : m;
         
-        // Buscamos el mimetype en varios lugares por si las moscas
+        if (!packName) {
+            return sock.sendMessage(from, { 
+                text: `《✧》 *ERROR* ❀\n\n◈ _Falta el nombre del paquete, pariente._\n◈ _Ejemplo: *${prefix + command} mi pack*_` 
+            }, { quoted: m });
+        }
+
+        const q = m.quoted ? m.quoted : m;
         const mime = (q.msg || q).mimetype || q.mediaType || '';
         const isSticker = /sticker/.test(mime) || q.stickerMessage;
 
         if (!isSticker) {
-            // Log para que veas en la consola qué está detectando el bot realmente
-            console.log("Mime detectado:", mime); 
-            return m.reply('❌ ¡A ver, pariente! Responde a un *Sticker* de verdad.');
-        }
-
-        // 3. BUSCAR EL PAQUETE EN MONGODB (Aseguramos que el dueño sea m.sender)
-        const pack = await Pack.findOne({ owner: m.sender, name: packName });
-        
-        if (!pack) {
             return sock.sendMessage(from, { 
-                text: `❌ No encontré el paquete \`${packName}\` que te pertenezca.\n> Créalo primero con: *${prefix}newpack ${packName}*` 
+                text: `《✧》 *SISTEMA* ❀\n\n◈ _Responde a un *Sticker* para guardarlo en la nube._` 
             }, { quoted: m });
         }
 
-        // 4. LÍMITE DE STICKERS
-        if (pack.stickers.length >= 50) {
-            return sock.sendMessage(from, { text: '❌ Este paquete ya está lleno (máximo 50 stickers), pariente.' }, { quoted: m });
+        const creator = m.sender || m.key.participant;
+        const pack = await Pack.findOne({ owner: creator, name: packName });
+        
+        if (!pack) {
+            return sock.sendMessage(from, { 
+                text: `《✧》 *ARCHIVO* ❀\n\n◈ _No hallé el pack \`${packName}\`._\n◈ _Usa: *${prefix}newpack ${packName}*_` 
+            }, { quoted: m });
         }
 
-        await m.react('⏳');
+        await sock.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-        // 5. DESCARGAR EL STICKER
-        const buffer = await q.download();
-        if (!buffer) return m.reply('❌ No pude descargar el sticker, intenta de nuevo.');
+        const buffer = await q.download?.();
+        if (!buffer) return sock.sendMessage(from, { text: '◈ _Error al procesar archivo._' }, { quoted: m });
 
-        // 6. CONVERTIR A BASE64
         const base64Sticker = buffer.toString('base64');
 
-        // 7. EVITAR DUPLICADOS
-        // OJO: Aquí usa el nombre del campo que tengas en tu Schema (base64 o url)
         const isDuplicate = pack.stickers.some(s => s.base64 === base64Sticker);
         if (isDuplicate) {
-            await m.react('⚠️');
-            return m.reply(`❌ Ese sticker ya lo tienes en el paquete \`${packName}\`.`);
+            await sock.sendMessage(from, { react: { text: '⚠️', key: m.key } });
+            return sock.sendMessage(from, { text: `◈ _Ese sticker ya existe en \`${packName}\`._` }, { quoted: m });
         }
 
-        // 8. GUARDAR EN MONGODB (Usamos push directo al modelo encontrado)
         pack.stickers.push({
-            base64: base64Sticker, // Asegúrate que tu Schema tenga este campo 'base64'
+            base64: base64Sticker,
             createdAt: new Date()
         });
 
         await pack.save();
 
-        // 9. CONFIRMACIÓN FINAL ❀
-        await m.react('✅');
-        const successMsg = `❀ *STICKER AGREGADO* ❀\n\n` +
-                           `> 📦 *Pack:* \`${packName}\` \n` +
-                           `> 📊 *Total:* ${pack.stickers.length}/50\n\n` +
-                           `_Usa ${prefix}getpack ${packName} para ver tu colección._`;
+        await sock.sendMessage(from, { react: { text: '✅', key: m.key } });
+
+        const successMsg = `❀ *STICKER GUARDADO* ❀\n\n` +
+                           `《✧》 *INFO* ❀\n` +
+                           `◈ *Pack:* \`${packName}\` \n` +
+                           `◈ *Total:* ${pack.stickers.length} / 50 📊\n\n`;
 
         await sock.sendMessage(from, { text: successMsg }, { quoted: m });
 
     } catch (e) {
         console.error("Error en addsticker:", e);
-        sock.sendMessage(from, { text: `> ❌ ¡Hubo un fallo, pariente!: [${e.message}]` }, { quoted: m });
+        sock.sendMessage(from, { text: `◈ _Error crítico: [${e.message}]_` }, { quoted: m });
     }
 }
 break;
