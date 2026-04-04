@@ -279,18 +279,26 @@ sock.ev.on('messages.upsert', async ({ messages, type }) => {
     const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "";
     
     // --- AGREGA ESTO PARA QUE DETECTE LO QUE RESPONDES ---
+    // --- SERIALIZACIÓN REFORZADA ---
     const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
     m.quoted = quoted ? {
         type: Object.keys(quoted)[0],
         msg: quoted[Object.keys(quoted)[0]],
-        stickerMessage: quoted.stickerMessage, // Para los stickers
-        imageMessage: quoted.imageMessage,     // Para las fotos
+        stickerMessage: quoted.stickerMessage,
+        imageMessage: quoted.imageMessage,
         text: quoted.conversation || quoted.extendedTextMessage?.text || "",
         sender: m.message.extendedTextMessage?.contextInfo?.participant,
-        // Función mágica para descargar lo que respondes
-        download: () => downloadMediaMessage(m, 'buffer', {}, { 
-            reuploadRequest: sock.updateMediaMessage 
-        })
+        // Usamos una función de descarga manual para evitar el "empty media key"
+        download: async () => {
+            const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
+            const stickerMsg = quoted.stickerMessage || quoted.imageMessage || quoted;
+            const stream = await downloadContentFromMessage(stickerMsg, stickerMsg.mimetype.split('/')[0] === 'image' ? 'image' : 'sticker');
+            let buffer = Buffer.from([]);
+            for await (const chunk of stream) {
+                buffer = Buffer.concat([buffer, chunk]);
+            }
+            return buffer;
+        }
     } : null;
 
     // 3. Filtro Inteligente para que el bot te lea a TI (fromMe)
@@ -1989,30 +1997,33 @@ case 'addsticker': case 'stickeradd': {
         let packName = text.replace(command, '').replace(prefix, '').trim();
         if (!packName) return sock.sendMessage(from, { text: `《✧》 *ERROR* ❀\n\n◈ _Falta el nombre del paquete, pariente._` }, { quoted: m });
 
-        // --- ESTA PARTE ES LA QUE ESTABA FALLANDO ---
-        // Buscamos el sticker en el mensaje que respondiste (quoted)
-        const quoted = m.quoted ? m.quoted : null;
+        // Usamos la variable m.quoted que ya serializamos en el upsert
+        const quoted = m.quoted;
         
-        // Verificamos si existe el mensaje citado y si es un sticker de verdad
-        const esStickerReal = quoted && (quoted.mtype === 'stickerMessage' || quoted.stickerMessage || (quoted.msg && quoted.msg.stickerMessage));
+        // Verificamos si es sticker de forma más sencilla ya que m.quoted está limpio
+        const esStickerReal = quoted && (quoted.stickerMessage || quoted.type === 'stickerMessage');
 
         if (!esStickerReal) {
             return sock.sendMessage(from, { 
-                text: `《✧》 *SISTEMA* ❀\n\n◈ _¡A ver, pariente! Tienes que responder a un *Sticker*._\n◈ _Asegúrate de que sea un sticker enviado, no una imagen._` 
+                text: `《✧》 *SISTEMA* ❀\n\n◈ _¡A ver, pariente! Responde a un *Sticker*._` 
             }, { quoted: m });
         }
 
-        // --- SI PASÓ LA PRUEBA, BUSCAMOS EL PACK ---
-        const creator = m.sender || m.key.participant;
+        // Buscar el pack
+        const creator = m.sender || sender; // Usamos la variable sender que definiste arriba
         const pack = await Pack.findOne({ owner: creator, name: packName });
         
         if (!pack) return sock.sendMessage(from, { text: `《✧》 *ARCHIVO* ❀\n\n◈ _No hallé el pack \`${packName}\`._` }, { quoted: m });
 
         await sock.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-        // Descarga directa desde el mensaje citado
-        const buffer = await quoted.download();
-        if (!buffer) return sock.sendMessage(from, { text: '◈ _Error al bajar el sticker._' }, { quoted: m });
+        // DESCARGA: Aquí usamos la función que definimos en la serialización
+        const buffer = await quoted.download().catch(() => null);
+        
+        if (!buffer || buffer.length === 0) {
+            await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
+            return sock.sendMessage(from, { text: '◈ _Error: No pude obtener los datos del sticker._' }, { quoted: m });
+        }
 
         const base64Sticker = buffer.toString('base64');
         
@@ -2022,12 +2033,16 @@ case 'addsticker': case 'stickeradd': {
             return sock.sendMessage(from, { text: `◈ _Ese sticker ya lo tienes en \`${packName}\`._` }, { quoted: m });
         }
 
-        // Guardar en MongoDB
+        // Guardar en la nube ☁️
         pack.stickers.push({ base64: base64Sticker, createdAt: new Date() });
         await pack.save();
 
         await sock.sendMessage(from, { react: { text: '✅', key: m.key } });
-        const successMsg = `❀ *STICKER GUARDADO* ❀\n\n《✧》 *INFO* ❀\n◈ *Pack:* \`${packName}\` \n◈ *Total:* ${pack.stickers.length} / 50 📊\n\n> *By Charly-Bot | HOT ON* 💎`;
+        const successMsg = `❀ *STICKER GUARDADO* ❀\n\n` +
+                           `《✧》 *INFO* ❀\n` +
+                           `◈ *Pack:* \`${packName}\` \n` +
+                           `◈ *Total:* ${pack.stickers.length} / 50 📊\n\n` +
+                           `> *By Charly-Bot | HOT ON* 💎`;
 
         await sock.sendMessage(from, { text: successMsg }, { quoted: m });
 
