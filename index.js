@@ -1969,23 +1969,21 @@ try {
 break;
 
 case 'addsticker': case 'stickeradd': {
-    try {
-        // 1. FORMA SEGURA DE SACAR EL NOMBRE (Evita que llegue vacío)
-        // Quitamos el comando y el prefijo para quedarnos solo con el nombre del pack
+ try {
         let packName = text.replace(command, '').replace(prefix, '').trim();
-        
-        if (!packName || packName === '') {
-            return sock.sendMessage(from, { 
-                text: `❌ ¡Falta el nombre del paquete, pariente!\n\n> Ejemplo: *${prefix}addsticker mi pack*` 
-            }, { quoted: m });
-        }
+        if (!packName) return m.reply(`《✧》¡Falta el nombre del paquete, compa!`);
 
-        // 2. VERIFICAR QUE ESTÉS RESPONDIENDO A UN STICKER
+        // --- ESTA ES LA PARTE QUE VAMOS A REFORZAR ---
         const q = m.quoted ? m.quoted : m;
-        const mime = (q.msg || q).mimetype || '';
         
-        if (!/sticker/.test(mime)) {
-            return sock.sendMessage(from, { text: '❌ Responde a un *Sticker* para agregarlo al paquete, compa.' }, { quoted: m });
+        // Buscamos el mimetype en varios lugares por si las moscas
+        const mime = (q.msg || q).mimetype || q.mediaType || '';
+        const isSticker = /sticker/.test(mime) || q.stickerMessage;
+
+        if (!isSticker) {
+            // Log para que veas en la consola qué está detectando el bot realmente
+            console.log("Mime detectado:", mime); 
+            return m.reply('❌ ¡A ver, pariente! Responde a un *Sticker* de verdad.');
         }
 
         // 3. BUSCAR EL PAQUETE EN MONGODB (Aseguramos que el dueño sea m.sender)
