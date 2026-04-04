@@ -1705,54 +1705,55 @@ case 'vocal': case 'separate': {
     const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
     const isAudio = m.message.audioMessage || quoted?.audioMessage;
 
-    if (!isAudio) return sock.sendMessage(from, { text: '❌ Responde a un audio o nota de voz, pariente.' }, { quoted: m });
+    if (!isAudio) return sock.sendMessage(from, { text: '❌ Responde a un audio, compa.' }, { quoted: m });
 
     try {
-        // 1. Mensaje de espera estilo ❀
         await sock.sendMessage(from, { 
-            text: `❀ *PROCESANDO AUDIO* ❀\n\n> Separando voz e instrumentos con la API de Diego. Espera un momento...` 
+            text: `❀ *SEPARANDO AUDIO* ❀\n\n> ☁️ Procesando... Si tarda es por el peso del archivo.` 
         }, { quoted: m });
 
-        // 2. Descargar el audio
         const messageToDownload = quoted?.audioMessage || m.message.audioMessage;
         const stream = await downloadContentFromMessage(messageToDownload, 'audio');
         let buffer = Buffer.from([]);
         for await (const chunk of stream) { buffer = Buffer.concat([buffer, chunk]); }
 
-        // 3. Subir a Catbox
+        // 1. Subir a Catbox
         const audioUrl = await uploadAudio(buffer); 
 
-        // 4. Llamada a la API con tu KEY
+        // 2. API de Diego (Stellar)
         const response = await axios.get(`https://api.stellarwa.xyz/tools/vocalremover?url=${encodeURIComponent(audioUrl)}&key=api-qG4nw`);
         const json = response.data;
 
-        // 5. Verificamos el status del JSON que me pasaste
-        if (json.status) {
-            // Mandar la VOZ (json.vocal)
+        if (json.status && json.vocal) {
+            
+            // --- EL AJUSTE CLAVE AQUÍ ---
+            // Usamos 'audio/mpeg' o 'audio/mp4' pero forzamos el PTT
+            
+            // Enviamos la VOZ
             await sock.sendMessage(from, { 
                 audio: { url: json.vocal }, 
-                mimetype: 'audio/mp4', 
+                mimetype: 'audio/mp4', // Prueba con 'audio/mpeg' si sigue fallando
                 ptt: true 
             }, { quoted: m });
 
-            // Mandar la PISTA (json.instrumental)
+            // Enviamos la PISTA
             await sock.sendMessage(from, { 
                 audio: { url: json.instrumental }, 
                 mimetype: 'audio/mp4', 
                 ptt: true 
             });
 
-            // 6. Confirmación final ❀
             await sock.sendMessage(from, { 
-                text: `❀ *¡LISTO, COMPA!* ❀\n\n> 🎙️ El primero es la *VOZ*.\n> 🎹 El segundo es la *PISTA*.\n\n_By Charly-Bot Maestro V2_` 
+                text: `❀ ¡Listo! Ya deberían cargar.\n\n> Si no cargan, el audio original era muy pesado para la API.` 
             });
+
         } else {
-            sock.sendMessage(from, { text: "❌ La API no pudo procesar el audio, intenta con otro." });
+            sock.sendMessage(from, { text: "❌ La API no pudo generar los links. Intenta con otro audio más corto." });
         }
 
     } catch (e) {
         console.error("Error en Vocal Remover:", e);
-        sock.sendMessage(from, { text: "❌ Hubo un fallo en la conexión, pariente." });
+        sock.sendMessage(from, { text: "❌ Hubo un fallo técnico. Checa que Railway no esté saturado." });
     }
 }
 break;
@@ -1909,12 +1910,14 @@ break;
 ///////
 
 case 'newpack': {
-    // 1. Agarramos lo que sobra después del comando (args ya viene limpio por tu prefijo)
-    const packName = q.trim(); // 'q' suele ser la variable que guarda el texto después del comando
+    // 1. Usamos 'text' que es la que ya tienes definida arriba con (m.text || m.caption || "")
+    // Quitamos la primera palabra (el comando) para quedarnos con el nombre del pack
+    const args = text.trim().split(/\s+/);
+    const packName = args.slice(1).join(' ').trim();
 
-    // Si no hay texto después del comando, pide el nombre
+    // Si no hay nombre después del comando, mandamos el aviso
     if (!packName) return sock.sendMessage(from, { 
-        text: `❌ Indica el nombre del paquete, pariente.\n\n> Ejemplo: *${prefix}newpack estilos brat*` 
+        text: `❌ ¡Falta el nombre del paquete, pariente!\n\n> Ejemplo: *.newpack estilos brat*` 
     }, { quoted: m });
 
     try {
@@ -1930,13 +1933,13 @@ case 'newpack': {
             { upsert: true }
         );
 
-        const responseText = `❀ El paquete de stickers \`${packName}\` ha sido creado exitosamente!\n\n> Agrega stickers respondiendo a uno con: *${prefix}addsticker ${packName}*`;
+        const responseText = `❀ El paquete de stickers \`${packName}\` ha sido creado exitosamente!\n\n> Agrega stickers con: *#addsticker ${packName}*`;
 
         await sock.sendMessage(from, { text: responseText }, { quoted: m });
 
     } catch (e) {
-        console.error(e);
-        sock.sendMessage(from, { text: '❌ Hubo un error al guardar en MongoDB.' });
+        console.error("Error en MongoDB:", e);
+        sock.sendMessage(from, { text: '❌ Hubo un error al guardar en la base de datos.' });
     }
 }
 break;
