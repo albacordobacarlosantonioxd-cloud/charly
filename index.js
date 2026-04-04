@@ -1902,43 +1902,43 @@ break;
 
 case 'newpack': case 'newstickerpack': {
     try {
-        // 1. Sacamos el nombre del pack de la variable 'text'
         const args = text.trim().split(/\s+/);
         let name = args.slice(1).join(' ').trim();
 
-        // 2. Si no pusiste nombre, le inventamos uno para que no truene
         if (!name) {
             name = `Pack-${Date.now().toString().slice(-4)}`;
         }
 
-        // 3. Validación de longitud (máximo 64 para que no rompa la DB)
         if (name.length > 64) {
             return sock.sendMessage(from, { text: '❌ El nombre es demasiado largo, pariente.' }, { quoted: m });
         }
 
-        // 4. BUSCAR SI YA EXISTE EN TU MONGODB
-        // Usamos el modelo 'Pack' que es el que tienes definido
-        const existingPack = await Pack.findOne({ owner: m.sender, name: name });
+        // --- SOLUCIÓN AL OWNER ---
+        // Usamos varias opciones para asegurar que el ID no llegue vacío
+        const creator = m.sender || m.key.participant || m.key.remoteJid;
+        
+        if (!creator) {
+            return sock.sendMessage(from, { text: '❌ No pude identificar quién eres, intenta de nuevo.' }, { quoted: m });
+        }
+
+        const existingPack = await Pack.findOne({ owner: creator, name: name });
 
         if (existingPack) {
             return sock.sendMessage(from, { text: `❌ Ya tienes un paquete llamado \`${name}\`, usa otro nombre compa.` }, { quoted: m });
         }
 
-        // 5. CREAR EL NUEVO PACK EN LA BASE DE DATOS
+        // --- CREAR EL PACK (Solo con campos que existen en tu Schema) ---
         const newPack = new Pack({
-            owner: m.sender, // Tu ID de WhatsApp
+            owner: creator, 
             name: name,
             author: 'Charly-Bot 😎', 
-            desc: `Paquete creado por ${m.pushName || 'Usuario'}`,
-            stickers: [], // Empieza vacío
-            isPublic: false, // Por defecto privado
-            createdAt: new Date()
+            isPublic: false,
+            stickers: [] 
+            // Quitamos 'desc' y 'createdAt' porque no están en tu Schema
         });
 
-        // 6. Guardar en MongoDB
         await newPack.save();
 
-        // 7. Confirmación estilo Charly ❀
         const successMsg = `❀ *PAQUETE CREADO EN DB* ❀\n\n` +
                            `> 📦 *Nombre:* \`${name}\` \n` +
                            `> ✅ *Estado:* Guardado en MongoDB\n\n` +
