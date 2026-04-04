@@ -1909,17 +1909,19 @@ break;
 ///////
 
 case 'newpack': {
-    const text = m.text || m.caption || ""; // Seguridad contra el error de ayer
-    const packName = text.split(' ').slice(1).join(' ');
-    
-    if (!packName) return sock.sendMessage(from, { text: '❌ Ponle un nombre al paquete. Ej: #newpack estilos brat' });
+    // 1. Agarramos lo que sobra después del comando (args ya viene limpio por tu prefijo)
+    const packName = q.trim(); // 'q' suele ser la variable que guarda el texto después del comando
+
+    // Si no hay texto después del comando, pide el nombre
+    if (!packName) return sock.sendMessage(from, { 
+        text: `❌ Indica el nombre del paquete, pariente.\n\n> Ejemplo: *${prefix}newpack estilos brat*` 
+    }, { quoted: m });
 
     try {
-        // Usamos el modelo Pack de Mongoose que definimos hace rato
         await Pack.updateOne(
             { owner: m.sender, name: packName },
             { 
-                $setOnInsert: { // Solo pone estos datos si el pack es NUEVO
+                $setOnInsert: { 
                     createdAt: new Date(), 
                     isPublic: false,
                     stickers: [] 
@@ -1928,13 +1930,13 @@ case 'newpack': {
             { upsert: true }
         );
 
-        const responseText = `❀ El paquete de stickers \`${packName}\` ha sido creado exitosamente!\n\n> Puedes agregar stickers a este paquete respondiendo a un sticker con *#addsticker ${packName}*`;
+        const responseText = `❀ El paquete de stickers \`${packName}\` ha sido creado exitosamente!\n\n> Agrega stickers respondiendo a uno con: *${prefix}addsticker ${packName}*`;
 
         await sock.sendMessage(from, { text: responseText }, { quoted: m });
 
     } catch (e) {
         console.error(e);
-        sock.sendMessage(from, { text: '❌ Hubo un error al guardar el paquete en la base de datos.' });
+        sock.sendMessage(from, { text: '❌ Hubo un error al guardar en MongoDB.' });
     }
 }
 break;
