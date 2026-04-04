@@ -109,7 +109,6 @@ const mongoURI = 'mongodb+srv://adminbot:adminbot@cluster0.q2q0czd.mongodb.net/B
 
 
 // 1. UN SOLO SCHEMA PARA TODO (Dinero, Comandos e Historial)
-// --- 1. MODELO ÚNICO DE USUARIO (Fusionado) ---
 const UserSchema = new mongoose.Schema({
     jid: { type: String, required: true, unique: true },
     name: { type: String, default: 'Usuario' },
@@ -118,18 +117,13 @@ const UserSchema = new mongoose.Schema({
     lastDailyGlobal: { type: Number, default: 0 },
     streak: { type: Number, default: 0 },
     usedcommands: { type: Number, default: 0 },
-    
-    // Datos del Perfil
     birth: { type: String, default: 'No definido' },
     hobby: { type: String, default: 'No definido' },
     gender: { type: String, default: 'No definido' },
     description: { type: String, default: 'Sin descripción' },
-    
-    // Relaciones
     marry: { type: String, default: null },
     marryName: { type: String, default: 'Nadie' },
-    
-    // Niveles
+
     level: { type: Number, default: 1 },
     exp: { type: Number, default: 0 },
     history: { type: Array, default: [] }
@@ -149,17 +143,18 @@ const Group = mongoose.model('Group', GroupSchema);
 
 // --- 3. NUEVO: MODELO DE PAQUETES DE STICKERS (❀ Estilos Brat) ---
 const PackSchema = new mongoose.Schema({
-    owner: { type: String, required: true }, // JID del creador (tú)
-    name: { type: String, required: true },  // Nombre del pack (ej: estilos brat)
-    author: { type: String, default: 'Charly-Bot' }, // El autor que sale en el sticker
-    isPublic: { type: Boolean, default: false }, // Para el comando #setpack
+    owner: { type: String, required: true },
+    name: { type: String, required: true },
+    author: { type: String, default: 'Charly-Bot' },
+    desc: { type: String, default: 'Sin descripción' }, // <--- AGREGA ESTA LÍNEA
+    isPublic: { type: Boolean, default: false },
     stickers: [{
-        url: String,        // Link donde se subió el sticker (Stellar/Catbox)
-        fileSha256: String, // Para poder borrarlo con #delmeta
+        url: String,
+        fileSha256: String,
         createdAt: { type: Date, default: Date.now }
-    }]
+    }],
+    createdAt: { type: Date, default: Date.now } // <--- TAMBIÉN AGREGA ESTA
 });
-
 // Definimos el modelo Pack
 const Pack = mongoose.model('Pack', PackSchema);
 
