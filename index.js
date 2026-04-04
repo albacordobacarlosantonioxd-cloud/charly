@@ -1973,20 +1973,20 @@ case 'addsticker': case 'stickeradd': {
         let packName = text.replace(command, '').replace(prefix, '').trim();
         if (!packName) return sock.sendMessage(from, { text: `《✧》 *ERROR* ❀\n\n◈ _Falta el nombre del paquete, pariente._` }, { quoted: m });
 
-        // --- DETECTOR MEJORADO ---
-        // Buscamos el sticker en el mensaje citado o en el principal
-        const q = m.quoted ? m.quoted : m;
-        const mime = (q.msg || q).mimetype || '';
+        // --- ESTA PARTE ES LA QUE ESTABA FALLANDO ---
+        // Buscamos el sticker en el mensaje que respondiste (quoted)
+        const quoted = m.quoted ? m.quoted : null;
         
-        // Esta línea es la clave: busca por tipo de mensaje o por mimetype
-        const esSticker = m.type === 'stickerMessage' || m.msg?.stickerMessage || q.stickerMessage || /sticker/.test(mime);
+        // Verificamos si existe el mensaje citado y si es un sticker de verdad
+        const esStickerReal = quoted && (quoted.mtype === 'stickerMessage' || quoted.stickerMessage || (quoted.msg && quoted.msg.stickerMessage));
 
-        if (!esSticker) {
+        if (!esStickerReal) {
             return sock.sendMessage(from, { 
-                text: `《✧》 *SISTEMA* ❀\n\n◈ _Responde a un *Sticker* para guardarlo en la nube._` 
+                text: `《✧》 *SISTEMA* ❀\n\n◈ _¡A ver, pariente! Tienes que responder a un *Sticker*._\n◈ _Asegúrate de que sea un sticker enviado, no una imagen._` 
             }, { quoted: m });
         }
 
+        // --- SI PASÓ LA PRUEBA, BUSCAMOS EL PACK ---
         const creator = m.sender || m.key.participant;
         const pack = await Pack.findOne({ owner: creator, name: packName });
         
@@ -1994,22 +1994,19 @@ case 'addsticker': case 'stickeradd': {
 
         await sock.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-        // Intentamos descargar con varias rutas por si una falla
-        const buffer = await q.download?.() || await m.quoted?.download?.();
-        
-        if (!buffer) {
-            await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
-            return sock.sendMessage(from, { text: '◈ _Error al descargar el sticker._' }, { quoted: m });
-        }
+        // Descarga directa desde el mensaje citado
+        const buffer = await quoted.download();
+        if (!buffer) return sock.sendMessage(from, { text: '◈ _Error al bajar el sticker._' }, { quoted: m });
 
         const base64Sticker = buffer.toString('base64');
-        const isDuplicate = pack.stickers.some(s => s.base64 === base64Sticker);
         
-        if (isDuplicate) {
+        // Evitar repetidos
+        if (pack.stickers.some(s => s.base64 === base64Sticker)) {
             await sock.sendMessage(from, { react: { text: '⚠️', key: m.key } });
-            return sock.sendMessage(from, { text: `◈ _Ese sticker ya existe en \`${packName}\`._` }, { quoted: m });
+            return sock.sendMessage(from, { text: `◈ _Ese sticker ya lo tienes en \`${packName}\`._` }, { quoted: m });
         }
 
+        // Guardar en MongoDB
         pack.stickers.push({ base64: base64Sticker, createdAt: new Date() });
         await pack.save();
 
