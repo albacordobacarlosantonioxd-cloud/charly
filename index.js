@@ -141,21 +141,26 @@ onlyAdmin: { type: Boolean, default: false }, // Lo que hicimos hace rato
 
 const Group = mongoose.model('Group', GroupSchema);
 
-// --- 3. NUEVO: MODELO DE PAQUETES DE STICKERS (❀ Estilos Brat) ---
+// --- 3. MODELO DE PAQUETES DE STICKERS (❀ Estilos Brat) ---
 const PackSchema = new mongoose.Schema({
-    owner: { type: String, required: true },
-    name: { type: String, required: true },
-    author: { type: String, default: 'Charly-Bot' },
-    desc: { type: String, default: 'Sin descripción' }, // <--- AGREGA ESTA LÍNEA
+    owner: { type: String, required: true }, // JID del creador
+    name: { type: String, required: true },  // Nombre del pack
+    author: { type: String, default: 'Charly-Bot' }, 
+    desc: { type: String, default: 'Sin descripción' },
     isPublic: { type: Boolean, default: false },
+    
     stickers: [{
-        url: String,
-        fileSha256: String,
+        base64: { type: String }, // <--- AQUÍ SE GUARDA LA IMAGEN DEL STICKER
+        url: { type: String },    // Por si luego quieres usar enlaces (Stellar/Catbox)
+        fileSha256: { type: String }, 
         createdAt: { type: Date, default: Date.now }
     }],
-    createdAt: { type: Date, default: Date.now } // <--- TAMBIÉN AGREGA ESTA
+
+    createdAt: { type: Date, default: Date.now },
+    lastModified: { type: Date, default: Date.now } // Para saber cuándo se añadió el último
 });
-// Definimos el modelo Pack
+
+// Definimos el modelo Pack (Solo una vez en tu archivo)
 const Pack = mongoose.model('Pack', PackSchema);
 
 global.proposals = {};
@@ -1965,65 +1970,68 @@ break;
 
 case 'addsticker': case 'stickeradd': {
     try {
-        // 1. Sacamos el nombre del pack desde la variable 'text'
-        const args = text.trim().split(/\s+/);
-        const packName = args.slice(1).join(' ').trim();
+        // 1. FORMA SEGURA DE SACAR EL NOMBRE (Evita que llegue vacío)
+        // Quitamos el comando y el prefijo para quedarnos solo con el nombre del pack
+        let packName = text.replace(command, '').replace(prefix, '').trim();
         
-        if (!packName) return sock.sendMessage(from, { text: `❌ ¡Falta el nombre del paquete, pariente!\n\n> Ejemplo: *${prefix}addsticker mi pack*` }, { quoted: m });
+        if (!packName || packName === '') {
+            return sock.sendMessage(from, { 
+                text: `❌ ¡Falta el nombre del paquete, pariente!\n\n> Ejemplo: *${prefix}addsticker mi pack*` 
+            }, { quoted: m });
+        }
 
-        // 2. Verificar que estés respondiendo a un sticker
-        const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
-        const isSticker = quoted?.stickerMessage;
+        // 2. VERIFICAR QUE ESTÉS RESPONDIENDO A UN STICKER
+        const q = m.quoted ? m.quoted : m;
+        const mime = (q.msg || q).mimetype || '';
+        
+        if (!/sticker/.test(mime)) {
+            return sock.sendMessage(from, { text: '❌ Responde a un *Sticker* para agregarlo al paquete, compa.' }, { quoted: m });
+        }
 
-        if (!isSticker) return sock.sendMessage(from, { text: '❌ Responde a un sticker para agregarlo al paquete.' }, { quoted: m });
-
-        // 3. Buscar el paquete en MongoDB
+        // 3. BUSCAR EL PAQUETE EN MONGODB (Aseguramos que el dueño sea m.sender)
         const pack = await Pack.findOne({ owner: m.sender, name: packName });
         
         if (!pack) {
-            return sock.sendMessage(from, { text: `❌ No encontré el paquete \`${packName}\`. Créalo primero con *${prefix}newpack ${packName}*` }, { quoted: m });
+            return sock.sendMessage(from, { 
+                text: `❌ No encontré el paquete \`${packName}\` que te pertenezca.\n> Créalo primero con: *${prefix}newpack ${packName}*` 
+            }, { quoted: m });
         }
 
-        // 4. Límite de stickers (para que no pese tanto tu DB)
+        // 4. LÍMITE DE STICKERS
         if (pack.stickers.length >= 50) {
             return sock.sendMessage(from, { text: '❌ Este paquete ya está lleno (máximo 50 stickers), pariente.' }, { quoted: m });
         }
 
-        // 5. Descargar el sticker
-        const stream = await downloadContentFromMessage(quoted.stickerMessage, 'image');
-        let buffer = Buffer.from([]);
-        for await (const chunk of stream) { buffer = Buffer.concat([buffer, chunk]); }
+        await m.react('⏳');
 
-        if (!buffer || buffer.length === 0) return sock.sendMessage(from, { text: '❌ No pude descargar el sticker, intenta de nuevo.' });
+        // 5. DESCARGAR EL STICKER
+        const buffer = await q.download();
+        if (!buffer) return m.reply('❌ No pude descargar el sticker, intenta de nuevo.');
 
-        // 6. Convertir a Base64 para guardarlo en Mongo
+        // 6. CONVERTIR A BASE64
         const base64Sticker = buffer.toString('base64');
 
-        // 7. Evitar duplicados en el mismo pack
-        // Revisamos si ese código base64 ya está en el array de stickers
+        // 7. EVITAR DUPLICADOS
+        // OJO: Aquí usa el nombre del campo que tengas en tu Schema (base64 o url)
         const isDuplicate = pack.stickers.some(s => s.base64 === base64Sticker);
         if (isDuplicate) {
-            return sock.sendMessage(from, { text: `❌ Ese sticker ya lo tienes en el paquete \`${packName}\`.` }, { quoted: m });
+            await m.react('⚠️');
+            return m.reply(`❌ Ese sticker ya lo tienes en el paquete \`${packName}\`.`);
         }
 
-        // 8. GUARDAR EN MONGODB
-        await Pack.updateOne(
-            { owner: m.sender, name: packName },
-            { 
-                $push: { 
-                    stickers: { 
-                        base64: base64Sticker,
-                        createdAt: new Date()
-                    } 
-                },
-                $set: { lastModified: new Date() }
-            }
-        );
+        // 8. GUARDAR EN MONGODB (Usamos push directo al modelo encontrado)
+        pack.stickers.push({
+            base64: base64Sticker, // Asegúrate que tu Schema tenga este campo 'base64'
+            createdAt: new Date()
+        });
 
-        // 9. Confirmación final ❀
+        await pack.save();
+
+        // 9. CONFIRMACIÓN FINAL ❀
+        await m.react('✅');
         const successMsg = `❀ *STICKER AGREGADO* ❀\n\n` +
                            `> 📦 *Pack:* \`${packName}\` \n` +
-                           `> 📊 *Total:* ${pack.stickers.length + 1}/50\n\n` +
+                           `> 📊 *Total:* ${pack.stickers.length}/50\n\n` +
                            `_Usa ${prefix}getpack ${packName} para ver tu colección._`;
 
         await sock.sendMessage(from, { text: successMsg }, { quoted: m });
