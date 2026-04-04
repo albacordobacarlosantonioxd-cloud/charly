@@ -62,7 +62,8 @@ const {
     useMultiFileAuthState, 
     fetchLatestBaileysVersion,
     DisconnectReason,
-downloadContentFromMessage
+    downloadContentFromMessage, 
+    downloadMediaMessage        
 } = require("@whiskeysockets/baileys");
 const { Boom } = require("@hapi/boom");
 const pino = require('pino');
@@ -274,9 +275,24 @@ sock.ev.on('messages.upsert', async ({ messages, type }) => {
     // 1. Definimos los prefijos UNA SOLA VEZ al principio
     const prefixes = ['.', '!', '/', '#', '$'];
 
-    // 2. Extraemos el cuerpo del mensaje (Body)
+   // 2. Extraemos el cuerpo del mensaje (Body)
     const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "";
     
+    // --- AGREGA ESTO PARA QUE DETECTE LO QUE RESPONDES ---
+    const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
+    m.quoted = quoted ? {
+        type: Object.keys(quoted)[0],
+        msg: quoted[Object.keys(quoted)[0]],
+        stickerMessage: quoted.stickerMessage, // Para los stickers
+        imageMessage: quoted.imageMessage,     // Para las fotos
+        text: quoted.conversation || quoted.extendedTextMessage?.text || "",
+        sender: m.message.extendedTextMessage?.contextInfo?.participant,
+        // Función mágica para descargar lo que respondes
+        download: () => downloadMediaMessage(m, 'buffer', {}, { 
+            reuploadRequest: sock.updateMediaMessage 
+        })
+    } : null;
+
     // 3. Filtro Inteligente para que el bot te lea a TI (fromMe)
     const isMe = m.key.fromMe;
     const prefix = prefixes.find(p => body.startsWith(p)); // Buscamos el prefijo
