@@ -528,6 +528,28 @@ async function uploadImage(buffer) {
 /////////////
 
 
+async function uploadAudio(buffer) {
+    try {
+        const bodyForm = new FormData();
+        // IMPORTANTE: Le ponemos nombre con extensión .mp3 para que Catbox y la API lo reconozcan bien
+        bodyForm.append('fileToUpload', buffer, {
+            filename: `audio_${Date.now()}.mp3`,
+            contentType: 'audio/mpeg'
+        });
+        bodyForm.append('reqtype', 'fileupload');
+
+        const res = await axios.post('https://catbox.moe/user/api.php', bodyForm, {
+            headers: {
+                ...bodyForm.getHeaders()
+            }
+        });
+
+        return res.data; // Esto te regresa el link directo tipo: https://files.catbox.moe/xxxxxx.mp3
+    } catch (err) {
+        console.error('Error al subir audio a Catbox:', err);
+        throw new Error('No se pudo subir el audio a internet, compa.');
+    }
+}
 
 /////////////
 
@@ -1679,6 +1701,64 @@ break;
 
 ///////////
 
+case 'vocal': case 'separate': {
+    const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
+    const isAudio = m.message.audioMessage || quoted?.audioMessage;
+
+    if (!isAudio) return sock.sendMessage(from, { text: '❌ Responde a un audio o nota de voz, pariente.' }, { quoted: m });
+
+    try {
+        // 1. Mensaje de espera estilo ❀
+        await sock.sendMessage(from, { 
+            text: `❀ *PROCESANDO AUDIO* ❀\n\n> Subiendo a Catbox y separando frecuencias con Stellar API. Espera un momento...` 
+        }, { quoted: m });
+
+        // 2. Descargar el audio de WhatsApp
+        const messageToDownload = quoted?.audioMessage || m.message.audioMessage;
+        const stream = await downloadContentFromMessage(messageToDownload, 'audio');
+        let buffer = Buffer.from([]);
+        for await (const chunk of stream) { buffer = Buffer.concat([buffer, chunk]); }
+
+        // 3. Subir a Catbox con tu función especial para audios
+        // (Asegúrate de tener la función uploadAudio que armamos arriba)
+        const audioUrl = await uploadAudio(buffer); 
+
+        // 4. Llamada a la API de Stellar
+        const response = await axios.get(`https://api.stellarwa.xyz/tools/vocalremover?url=${encodeURIComponent(audioUrl)}`);
+        const json = response.data;
+
+        if (json.status) {
+            // 5. Enviar la PURA VOZ (Directo, sin tarjeta)
+            await sock.sendMessage(from, { 
+                audio: { url: json.result.vocal }, 
+                mimetype: 'audio/mp4', 
+                ptt: true 
+            }, { quoted: m });
+
+            // 6. Enviar la PISTA / INSTRUMENTAL (Directo)
+            await sock.sendMessage(from, { 
+                audio: { url: json.result.instrumental }, 
+                mimetype: 'audio/mp4', 
+                ptt: true 
+            });
+
+            // 7. Confirmación final con tu estilo ❀
+            await sock.sendMessage(from, { 
+                text: `❀ *¡LISTO, PARIENTE!* ❀\n\n> 🎙️ El primer audio es la *VOZ*.\n> 🎹 El segundo audio es la *PISTA*.\n\n_By Charly-Bot Maestro V2_` 
+            });
+        } else {
+            sock.sendMessage(from, { text: "❌ La API de Stellar no pudo procesar este archivo, compa." });
+        }
+
+    } catch (e) {
+        console.error("Error en Vocal Remover:", e);
+        sock.sendMessage(from, { text: "❌ Hubo un fallo en la subida o en la conexión con la API. Inténtalo más tarde." });
+    }
+}
+break;
+
+////////////
+
  case 'imagine': case 'generar': {
     const axios = require('axios');
     const prompt = args.join(' ');
@@ -2053,6 +2133,8 @@ case 'menu': {
 
 《✧》 *MULTIMEDIA & DOWNLOAD*
 ◈ \`.audio\`
+◈ \`.vocal\`
+◈ \`.separate\`
 ◈ \`.video\`
 ◈ \`.album\`
 ◈ \`.tt\`
