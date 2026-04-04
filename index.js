@@ -1705,11 +1705,11 @@ case 'vocal': case 'separate': {
     const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
     const isAudio = m.message.audioMessage || quoted?.audioMessage;
 
-    if (!isAudio) return sock.sendMessage(from, { text: '❌ Responde a un audio, compa.' }, { quoted: m });
+    if (!isAudio) return sock.sendMessage(from, { text: '❌ Responde a un audio o nota de voz, pariente.' }, { quoted: m });
 
     try {
         await sock.sendMessage(from, { 
-            text: `❀ *SEPARANDO AUDIO* ❀\n\n> ☁️ Procesando... Si tarda es por el peso del archivo.` 
+            text: `❀ *PROCESANDO AUDIO* ❀\n\n> ☁️ Subiendo a Catbox y separando con Stellar API...\n> _Se enviarán como archivos MP3 para evitar errores._` 
         }, { quoted: m });
 
         const messageToDownload = quoted?.audioMessage || m.message.audioMessage;
@@ -1720,40 +1720,37 @@ case 'vocal': case 'separate': {
         // 1. Subir a Catbox
         const audioUrl = await uploadAudio(buffer); 
 
-        // 2. API de Diego (Stellar)
+        // 2. API de Diego (Stellar) con tu Key
         const response = await axios.get(`https://api.stellarwa.xyz/tools/vocalremover?url=${encodeURIComponent(audioUrl)}&key=api-qG4nw`);
         const json = response.data;
 
         if (json.status && json.vocal) {
             
-            // --- EL AJUSTE CLAVE AQUÍ ---
-            // Usamos 'audio/mpeg' o 'audio/mp4' pero forzamos el PTT
-            
-            // Enviamos la VOZ
+            // 3. ENVIAR LA VOZ (Como Documento MP3)
             await sock.sendMessage(from, { 
-                audio: { url: json.vocal }, 
-                mimetype: 'audio/mp4', // Prueba con 'audio/mpeg' si sigue fallando
-                ptt: true 
+                document: { url: json.vocal }, 
+                mimetype: 'audio/mpeg', 
+                fileName: `Vocal_By_CharlyBot.mp3` 
             }, { quoted: m });
 
-            // Enviamos la PISTA
+            // 4. ENVIAR LA PISTA (Como Documento MP3)
             await sock.sendMessage(from, { 
-                audio: { url: json.instrumental }, 
-                mimetype: 'audio/mp4', 
-                ptt: true 
+                document: { url: json.instrumental }, 
+                mimetype: 'audio/mpeg', 
+                fileName: `Pista_By_CharlyBot.mp3` 
             });
 
             await sock.sendMessage(from, { 
-                text: `❀ ¡Listo! Ya deberían cargar.\n\n> Si no cargan, el audio original era muy pesado para la API.` 
+                text: `❀ *¡LISTO, COMPA!* ❀\n\n> 🎙️ Ahí tienes la Voz y la Pista en formato MP3.\n> _Ya no debería marcar error de reproducción._` 
             });
 
         } else {
-            sock.sendMessage(from, { text: "❌ La API no pudo generar los links. Intenta con otro audio más corto." });
+            sock.sendMessage(from, { text: "❌ La API no pudo procesar este audio. Intenta con uno más corto." });
         }
 
     } catch (e) {
         console.error("Error en Vocal Remover:", e);
-        sock.sendMessage(from, { text: "❌ Hubo un fallo técnico. Checa que Railway no esté saturado." });
+        sock.sendMessage(from, { text: "❌ Hubo un fallo en la subida o en la API de Diego." });
     }
 }
 break;
@@ -1910,17 +1907,18 @@ break;
 ///////
 
 case 'newpack': {
-    // 1. Usamos 'text' que es la que ya tienes definida arriba con (m.text || m.caption || "")
-    // Quitamos la primera palabra (el comando) para quedarnos con el nombre del pack
+    // 1. Intentamos sacar el nombre después del comando
     const args = text.trim().split(/\s+/);
-    const packName = args.slice(1).join(' ').trim();
+    let packName = args.slice(1).join(' ').trim();
 
-    // Si no hay nombre después del comando, mandamos el aviso
-    if (!packName) return sock.sendMessage(from, { 
-        text: `❌ ¡Falta el nombre del paquete, pariente!\n\n> Ejemplo: *.newpack estilos brat*` 
-    }, { quoted: m });
+    // 2. LA MAGIA: Si no pusiste nombre, el bot le pone uno automático
+    // Usamos 'Pack-' + los últimos 4 dígitos del tiempo actual para que sea único
+    if (!packName || packName === "") {
+        packName = `Pack-${Date.now().toString().slice(-4)}`;
+    }
 
     try {
+        // Guardamos o actualizamos en MongoDB
         await Pack.updateOne(
             { owner: m.sender, name: packName },
             { 
@@ -1933,39 +1931,44 @@ case 'newpack': {
             { upsert: true }
         );
 
-        const responseText = `❀ El paquete de stickers \`${packName}\` ha sido creado exitosamente!\n\n> Agrega stickers con: *#addsticker ${packName}*`;
+        // 3. Confirmación con estética ❀
+        const responseText = `❀ *NUEVO PAQUETE CREADO* ❀\n\n> 📦 Nombre: \`${packName}\` \n> ✅ Estado: Listo para stickers\n\nPara agregarle contenido, responde a un sticker o imagen con:\n*${prefix}addsticker ${packName}*`;
 
         await sock.sendMessage(from, { text: responseText }, { quoted: m });
 
     } catch (e) {
         console.error("Error en MongoDB:", e);
-        sock.sendMessage(from, { text: '❌ Hubo un error al guardar en la base de datos.' });
+        sock.sendMessage(from, { text: '❌ Hubo un error al guardar en la base de datos, compa.' });
     }
 }
 break;
 
 case 'addsticker': {
     try {
-        const text = m.text || m.caption || ""; // Parche para el error del split
-        const packName = text.split(' ').slice(1).join(' ');
+        // 1. Agarramos el nombre del pack igual que en newpack
+        const args = text.trim().split(/\s+/);
+        const packName = args.slice(1).join(' ').trim();
+        
         const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
         
+        // Detectar qué nos mandaron (imagen, sticker o video)
         const isImage = m.message.imageMessage || quoted?.imageMessage;
         const isSticker = quoted?.stickerMessage;
         const isVideo = m.message.videoMessage || quoted?.videoMessage;
 
-        if (!packName) return sock.sendMessage(from, { text: '❌ Indica a qué paquete lo quieres agregar.' });
-        if (!isImage && !isSticker && !isVideo) return sock.sendMessage(from, { text: '❌ Responde a una imagen o sticker para agregarlo.' });
+        if (!packName) return sock.sendMessage(from, { text: `❌ Indica a qué paquete lo quieres agregar, pariente.\n\n> Ejemplo: *${prefix}addsticker estilos brat*` }, { quoted: m });
+        if (!isImage && !isSticker && !isVideo) return sock.sendMessage(from, { text: '❌ Responde a una imagen, video o sticker para agregarlo.' }, { quoted: m });
 
-        // 1. Descargar el contenido
+        // 2. Descargar el contenido (Ajustado para que no truene)
         let type = isImage ? 'image' : (isSticker ? 'sticker' : 'video');
         const messageToDownload = isSticker ? quoted.stickerMessage : (quoted?.imageMessage || m.message.imageMessage || quoted?.videoMessage || m.message.videoMessage);
         
-        const stream = await downloadContentFromMessage(messageToDownload, type === 'sticker' ? 'image' : type); 
+        // El segundo parámetro de downloadContent debe ser 'image' si es sticker o imagen
+        const stream = await downloadContentFromMessage(messageToDownload, isSticker || isImage ? 'image' : 'video'); 
         let buffer = Buffer.from([]);
         for await (const chunk of stream) { buffer = Buffer.concat([buffer, chunk]); }
 
-        // 2. Crear Sticker con tus Metadatos
+        // 3. Crear el Sticker con tus Metadatos
         const sticker = new Sticker(buffer, {
             pack: packName,              
             author: 'Charly Pelón 😎',    
@@ -1975,32 +1978,33 @@ case 'addsticker': {
 
         const stickerBuffer = await sticker.toBuffer();
 
-        // --- NUEVO: GUARDAR EN MONGODB ---
-        // Aquí podrías subir el buffer a un hosting (Catbox/Telegraph) y guardar la URL.
-        // Por ahora lo registramos en el pack para que el bot sepa que existe.
+        // 4. GUARDAR EN MONGODB
+        // Buscamos si el pack existe antes de meterle el sticker
+        const checkPack = await Pack.findOne({ owner: m.sender, name: packName });
+        if (!checkPack) return sock.sendMessage(from, { text: `❌ El paquete \`${packName}\` no existe. Créalo primero con *.newpack ${packName}*` }, { quoted: m });
+
         await Pack.updateOne(
             { owner: m.sender, name: packName },
             { 
                 $push: { 
                     stickers: { 
-                        fileSha256: quoted?.stickerMessage?.fileSha256 || "temp-id-" + Date.now(),
+                        fileSha256: isSticker ? quoted.stickerMessage.fileSha256 : Buffer.from(stickerBuffer).toString('base64').slice(0, 10),
                         createdAt: new Date()
                     } 
                 } 
             }
         );
 
-        // 3. Enviar el sticker
+        // 5. Enviar el sticker y la confirmación ❀
         await sock.sendMessage(from, { sticker: stickerBuffer }, { quoted: m });
 
-        // 4. Confirmación con tu nuevo estilo ❀
-        const successMsg = `❀ El sticker ha sido agregado al paquete de stickers \`${packName}\` !\n\n> Puedes seguir agregando más respondiendo con *#addsticker ${packName}*`;
+        const successMsg = `❀ ¡Sticker agregado al paquete \`${packName}\`!\n\n> Sigue agregando más con: *${prefix}addsticker ${packName}*`;
         
         await sock.sendMessage(from, { text: successMsg }, { quoted: m });
 
     } catch (err) {
-        console.error(err);
-        sock.sendMessage(from, { text: '❌ Hubo un error al procesar el sticker.' });
+        console.error("Error en addsticker:", err);
+        sock.sendMessage(from, { text: '❌ Hubo un error al procesar el sticker o guardar en la base de datos.' });
     }
 }
 break;
@@ -2038,45 +2042,51 @@ break;
 
 case 'getpack': {
     try {
-        const text = m.text || m.caption || ""; // Parche para evitar el error del split
-        const packName = text.split(' ').slice(1).join(' ');
+        const args = text.trim().split(/\s+/);
+        const packName = args.slice(1).join(' ').trim();
         
-        if (!packName) return sock.sendMessage(from, { text: '❌ ¿Qué paquete quieres ver?' });
+        if (!packName) return sock.sendMessage(from, { text: `❌ ¿Qué paquete quieres ver?\n\n> Ejemplo: *${prefix}getpack mi pack*` }, { quoted: m });
 
-        // Buscamos el paquete usando el modelo Pack de Mongoose
+        // Buscamos el paquete en la base de datos
         const pack = await Pack.findOne({ name: packName });
         
         if (!pack || !pack.stickers || pack.stickers.length === 0) {
-            return sock.sendMessage(from, { text: `❌ El paquete \`${packName}\` no existe o está vacío.` });
+            return sock.sendMessage(from, { text: `❌ El paquete \`${packName}\` no existe o no tiene stickers guardados.` });
         }
 
-        // Usamos el primer sticker del pack como portada
-        // Si no tienes URL, puedes usar una imagen por defecto del bot
-        const portadaSticker = pack.stickers[0].url || 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png';
+        const getpackText = `❀ *PAQUETE: ${packName}* ❀\n\n> 📂 Stickers encontrados: *${pack.stickers.length}*\n\n_Enviando colección completa..._`;
 
-        const getpackText = `❀ Paquete \`${packName}\` encontrado!\n\n> Toca abajo para ver todos los stickers del pack.`;
-
+        // 1. Mandamos el mensaje con la tarjetita pro
         await sock.sendMessage(from, {
             text: getpackText,
             contextInfo: {
                 externalAdReply: {
                     title: `📦 Pack: ${packName}`,
-                    body: `Creado por Charly Pelón 😎`,
-                    thumbnailUrl: portadaSticker, 
+                    body: `Charly-Bot Maestro V2`,
+                    thumbnailUrl: 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png', 
                     sourceUrl: 'https://wa.me/524991213571', 
                     mediaType: 1,
-                    renderLargerThumbnail: true, // Esto hace que la imagen se vea grande y pro
+                    renderLargerThumbnail: true,
                     showAdAttribution: false 
                 }
             }
         }, { quoted: m });
 
-        // Te manda el primer sticker del pack para que lo tengas a la mano
-        await sock.sendMessage(from, { sticker: { url: portadaSticker } });
+        // 2. ¡LA CLAVE! Ciclo para mandar TODOS los stickers del pack
+        for (let sticker of pack.stickers) {
+            // Si guardaste el sticker como buffer o link en 'url'
+            if (sticker.url) {
+                await sock.sendMessage(from, { sticker: { url: sticker.url } });
+            } else if (sticker.buffer) {
+                await sock.sendMessage(from, { sticker: sticker.buffer });
+            }
+            // Pequeño delay para que WhatsApp no te banee por mandar muchos de golpe
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
 
     } catch (e) {
-        console.error(e);
-        sock.sendMessage(from, { text: '❌ Hubo un error al buscar el paquete.' });
+        console.error("Error en getpack:", e);
+        sock.sendMessage(from, { text: '❌ Hubo un error al recuperar los stickers.' });
     }
 }
 break;
