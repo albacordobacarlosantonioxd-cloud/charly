@@ -1710,49 +1710,49 @@ case 'vocal': case 'separate': {
     try {
         // 1. Mensaje de espera estilo ❀
         await sock.sendMessage(from, { 
-            text: `❀ *PROCESANDO AUDIO* ❀\n\n> Subiendo a Catbox y separando frecuencias con Stellar API. Espera un momento...` 
+            text: `❀ *PROCESANDO AUDIO* ❀\n\n> Separando voz e instrumentos con la API de Diego. Espera un momento...` 
         }, { quoted: m });
 
-        // 2. Descargar el audio de WhatsApp
+        // 2. Descargar el audio
         const messageToDownload = quoted?.audioMessage || m.message.audioMessage;
         const stream = await downloadContentFromMessage(messageToDownload, 'audio');
         let buffer = Buffer.from([]);
         for await (const chunk of stream) { buffer = Buffer.concat([buffer, chunk]); }
 
-        // 3. Subir a Catbox con tu función especial para audios
-        // (Asegúrate de tener la función uploadAudio que armamos arriba)
+        // 3. Subir a Catbox
         const audioUrl = await uploadAudio(buffer); 
 
-        // 4. Llamada a la API de Stellar
-        const response = await axios.get(`https://api.stellarwa.xyz/tools/vocalremover?url=${encodeURIComponent(audioUrl)}`);
+        // 4. Llamada a la API con tu KEY
+        const response = await axios.get(`https://api.stellarwa.xyz/tools/vocalremover?url=${encodeURIComponent(audioUrl)}&key=api-qG4nw`);
         const json = response.data;
 
+        // 5. Verificamos el status del JSON que me pasaste
         if (json.status) {
-            // 5. Enviar la PURA VOZ (Directo, sin tarjeta)
+            // Mandar la VOZ (json.vocal)
             await sock.sendMessage(from, { 
-                audio: { url: json.result.vocal }, 
+                audio: { url: json.vocal }, 
                 mimetype: 'audio/mp4', 
                 ptt: true 
             }, { quoted: m });
 
-            // 6. Enviar la PISTA / INSTRUMENTAL (Directo)
+            // Mandar la PISTA (json.instrumental)
             await sock.sendMessage(from, { 
-                audio: { url: json.result.instrumental }, 
+                audio: { url: json.instrumental }, 
                 mimetype: 'audio/mp4', 
                 ptt: true 
             });
 
-            // 7. Confirmación final con tu estilo ❀
+            // 6. Confirmación final ❀
             await sock.sendMessage(from, { 
-                text: `❀ *¡LISTO, PARIENTE!* ❀\n\n> 🎙️ El primer audio es la *VOZ*.\n> 🎹 El segundo audio es la *PISTA*.\n\n_By Charly-Bot Maestro V2_` 
+                text: `❀ *¡LISTO, COMPA!* ❀\n\n> 🎙️ El primero es la *VOZ*.\n> 🎹 El segundo es la *PISTA*.\n\n_By Charly-Bot Maestro V2_` 
             });
         } else {
-            sock.sendMessage(from, { text: "❌ La API de Stellar no pudo procesar este archivo, compa." });
+            sock.sendMessage(from, { text: "❌ La API no pudo procesar el audio, intenta con otro." });
         }
 
     } catch (e) {
         console.error("Error en Vocal Remover:", e);
-        sock.sendMessage(from, { text: "❌ Hubo un fallo en la subida o en la conexión con la API. Inténtalo más tarde." });
+        sock.sendMessage(from, { text: "❌ Hubo un fallo en la conexión, pariente." });
     }
 }
 break;
