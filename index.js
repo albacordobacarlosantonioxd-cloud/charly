@@ -1709,7 +1709,7 @@ case 'vocal': case 'separate': {
 
     try {
         await sock.sendMessage(from, { 
-            text: `❀ *PROCESANDO AUDIO* ❀\n\n> ☁️ Subiendo a Catbox y separando con Stellar API...\n> _Se enviarán como archivos MP3 para evitar errores._` 
+            text: `❀ *PROCESANDO AUDIO* ❀\n\n> ☁️ Separando voz y pista... Espera un momento.` 
         }, { quoted: m });
 
         const messageToDownload = quoted?.audioMessage || m.message.audioMessage;
@@ -1720,41 +1720,40 @@ case 'vocal': case 'separate': {
         // 1. Subir a Catbox
         const audioUrl = await uploadAudio(buffer); 
 
-        // 2. API de Diego (Stellar) con tu Key
+        // 2. API de Diego (Stellar)
         const response = await axios.get(`https://api.stellarwa.xyz/tools/vocalremover?url=${encodeURIComponent(audioUrl)}&key=api-qG4nw`);
         const json = response.data;
 
         if (json.status && json.vocal) {
             
-            // 3. ENVIAR LA VOZ (Como Documento MP3)
+            // 3. ENVIAR LA VOZ (Como reproductor de Audio MP3)
             await sock.sendMessage(from, { 
-                document: { url: json.vocal }, 
-                mimetype: 'audio/mpeg', 
-                fileName: `Vocal_By_CharlyBot.mp3` 
+                audio: { url: json.vocal }, 
+                mimetype: 'audio/mpeg', // MP3 estándar
+                ptt: false // <--- IMPORTANTE: Falso para que sea reproductor de audio, no nota de voz
             }, { quoted: m });
 
-            // 4. ENVIAR LA PISTA (Como Documento MP3)
+            // 4. ENVIAR LA PISTA (Como reproductor de Audio MP3)
             await sock.sendMessage(from, { 
-                document: { url: json.instrumental }, 
+                audio: { url: json.instrumental }, 
                 mimetype: 'audio/mpeg', 
-                fileName: `Pista_By_CharlyBot.mp3` 
+                ptt: false 
             });
 
             await sock.sendMessage(from, { 
-                text: `❀ *¡LISTO, COMPA!* ❀\n\n> 🎙️ Ahí tienes la Voz y la Pista en formato MP3.\n> _Ya no debería marcar error de reproducción._` 
+                text: `❀ *¡LISTO!* ❀\n\n> 🎙️ El primero es la *VOZ*.\n> 🎹 El segundo es la *PISTA*.\n\n_By Charly-Bot_` 
             });
 
         } else {
-            sock.sendMessage(from, { text: "❌ La API no pudo procesar este audio. Intenta con uno más corto." });
+            sock.sendMessage(from, { text: "❌ La API falló. Intenta con un audio más corto." });
         }
 
     } catch (e) {
-        console.error("Error en Vocal Remover:", e);
-        sock.sendMessage(from, { text: "❌ Hubo un fallo en la subida o en la API de Diego." });
+        console.error("Error:", e);
+        sock.sendMessage(from, { text: "❌ Hubo un error en el proceso." });
     }
 }
 break;
-
 ////////////
 
  case 'imagine': case 'generar': {
