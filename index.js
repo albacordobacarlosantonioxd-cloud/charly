@@ -1898,14 +1898,23 @@ case 'img': {
 }
 break; 
 
+
 ///////
 
-case 'newpack': case 'newstickerpack': {
-    try {
-        const args = text.trim().split(/\s+/);
-        let name = args.slice(1).join(' ').trim();
+console.log("Comando usado:", command);
+console.log("Texto completo:", text);
+console.log("Nombre extraído:", name);
 
-        if (!name) {
+
+case 'newpack': case 'newstickerpack': {
+try {
+        // --- NUEVA FORMA DE SACAR EL NOMBRE ---
+        // 'q' suele ser lo que sobra después del comando en muchos bots
+        // Si no usas 'q', usa 'm.text' o 'text' pero limpiando bien el prefijo
+        let name = text.replace(command, '').replace(prefix, '').trim();
+
+        // Si después de limpiar sigue vacío, entonces sí usamos el nombre al azar
+        if (!name || name === '') {
             name = `Pack-${Date.now().toString().slice(-4)}`;
         }
 
