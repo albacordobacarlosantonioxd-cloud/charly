@@ -574,6 +574,34 @@ async function uploadAudio(buffer) {
         throw new Error('No se pudo subir el audio a internet, compa.');
     }
 }
+////////////
+
+async function prepareStickerPack(stickers, packName, author) {
+    const webp = require('node-webpmux');
+    const stickerPack = [];
+
+    for (let buffer of stickers) {
+        try {
+            const img = new webp.Image();
+            await img.load(buffer);
+            const json = { 
+                "sticker-pack-id": `Charly-${Date.now()}`, 
+                "sticker-pack-name": packName, 
+                "sticker-pack-publisher": author 
+            };
+            const exifAttr = Buffer.from([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, 0x01, 0x00, 0x41, 0x57, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0x00, 0x00, 0x00]);
+            const jsonBuff = Buffer.from(JSON.stringify(json), 'utf-8');
+            const exif = Buffer.concat([exifAttr, jsonBuff]);
+            exif.writeUIntLE(jsonBuff.length, 14, 4);
+            img.exif = exif;
+            const stickerBuffer = await img.save(null);
+            stickerPack.push({ sticker: stickerBuffer });
+        } catch (e) {
+            console.error("Error procesando sticker para el pack:", e);
+        }
+    }
+    return stickerPack;
+}
 
 /////////////
 
@@ -2188,72 +2216,40 @@ case 'stickerdel': case 'delsticker': {
 break;
 
 
-case 'getpack': case 'pack': case 'stickerpack': {
+case 'getpack': case 'pack': {
     try {
-        // 1. SACAR EL NOMBRE DEL PACK SIN ERRORES
-        // Usamos esta forma para que no se coma la primera palabra del nombre
         let packName = text.replace(command, '').replace(prefix, '').trim();
-        
-        if (!packName) {
-            return sock.sendMessage(from, { 
-                text: `《✧》 *ERROR* ❀\n\n◈ _¿Qué paquete quieres, pariente?_\n◈ _Ejemplo: *${prefix}getpack mis stickers*_` 
-            }, { quoted: m });
-        }
+        if (!packName) return sock.sendMessage(from, { text: `《✧》 *ERROR* ❀\n\n◈ _Escribe el nombre del pack, pariente._` }, { quoted: m });
 
-        // 2. BUSCAR EN MONGODB (Dueño o Público)
-        const creator = m.sender || sender; 
-        let pack = await Pack.findOne({ 
-            $or: [
-                { owner: creator, name: packName },
-                { name: packName, isPublic: true }
-            ]
+        const creator = m.sender || sender;
+        const pack = await Pack.findOne({ 
+            $or: [{ owner: creator, name: packName }, { name: packName, isPublic: true }]
         });
 
-        if (!pack) {
-            return sock.sendMessage(from, { 
-                text: `《✧》 *SISTEMA* ❀\n\n◈ _No hallé el pack \`${packName}\` o es privado._` 
-            }, { quoted: m });
-        }
+        if (!pack || !pack.stickers.length) return sock.sendMessage(from, { text: `《✧》 *SISTEMA* ❀\n\n◈ _Pack vacío o no encontrado._` }, { quoted: m });
 
-        if (!pack.stickers || pack.stickers.length === 0) {
-            return sock.sendMessage(from, { 
-                text: `《✧》 *ARCHIVO* ❀\n\n◈ _El paquete \`${packName}\` está vacío._` 
-            }, { quoted: m });
-        }
+        await sock.sendMessage(from, { react: { text: '📦', key: m.key } });
 
-        await sock.sendMessage(from, { react: { text: '⏳', key: m.key } });
+        // 1. Convertimos los base64 de Atlas a Buffers
+        const buffers = pack.stickers.map(s => Buffer.from(s.base64 || s, 'base64'));
 
-        // 3. CONVERTIR BASE64 A BUFFERS (Limpio)
-        const stickerResults = pack.stickers.map(s => {
-            try {
-                // Importante: Si s es un objeto, usamos s.base64, si no, s directo
-                const base64Data = s.base64 ? s.base64 : s;
-                return Buffer.from(base64Data, 'base64');
-            } catch (e) {
-                return null;
-            }
-        }).filter(b => b && b.length > 0);
+        // 2. LLAMAMOS A LA FUNCIÓN QUE "ACTIVA" EL PACK
+        const stickerPackData = await prepareStickerPack(buffers, pack.name, "Charly-Bot | HOT ON 💎");
 
-        if (stickerResults.length === 0) {
-            return sock.sendMessage(from, { text: '◈ _Error: Stickers corruptos en Atlas._' });
-        }
-
-        // 4. ENVIAR EL PAQUETE COMPLETO (Formato Yuki)
-        // Nota: Esto funciona si tu Baileys soporta 'stickerPack' o tienes el plugin
+        // 3. ENVIAMOS EL ARCHIVO COMPLETO
         await sock.sendMessage(from, { 
-            stickerPack: { 
-                name: pack.name, 
-                publisher: pack.author || 'Charly-Bot ', 
-                cover: stickerResults[0], 
-                stickers: stickerResults.map(s => ({ sticker: s }))
-            } 
+            stickerPack: {
+                name: pack.name,
+                publisher: "Charly-Bot | HOT ON 💎",
+                stickers: stickerPackData
+            }
         }, { quoted: m });
 
         await sock.sendMessage(from, { react: { text: '✅', key: m.key } });
 
     } catch (e) {
         console.error("Error en getpack:", e);
-        sock.sendMessage(from, { text: `◈ _Error crítico: [${e.message}]_` }, { quoted: m });
+        sock.sendMessage(from, { text: `◈ _Error: [${e.message}]_` }, { quoted: m });
     }
 }
 break;
