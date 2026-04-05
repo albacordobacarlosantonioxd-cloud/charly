@@ -2190,87 +2190,70 @@ break;
 
 case 'getpack': case 'pack': case 'stickerpack': {
     try {
-        const args = text.trim().split(/\s+/);
-        const packName = args.slice(1).join(' ').trim();
+        // 1. SACAR EL NOMBRE DEL PACK SIN ERRORES
+        // Usamos esta forma para que no se coma la primera palabra del nombre
+        let packName = text.replace(command, '').replace(prefix, '').trim();
         
-        if (!packName) return sock.sendMessage(from, { text: `❌ ¿Qué paquete quieres, pariente?\n\n> Ejemplo: *${prefix}getpack mis stickers*` }, { quoted: m });
+        if (!packName) {
+            return sock.sendMessage(from, { 
+                text: `《✧》 *ERROR* ❀\n\n◈ _¿Qué paquete quieres, pariente?_\n◈ _Ejemplo: *${prefix}getpack mis stickers*_` 
+            }, { quoted: m });
+        }
 
-        // 1. BUSCAR EN MONGODB
-        // Buscamos si es tuyo O si es un pack público de alguien más
+        // 2. BUSCAR EN MONGODB (Dueño o Público)
+        const creator = m.sender || sender; 
         let pack = await Pack.findOne({ 
             $or: [
-                { owner: m.sender, name: packName },
+                { owner: creator, name: packName },
                 { name: packName, isPublic: true }
             ]
         });
 
-        if (!pack) return sock.sendMessage(from, { text: '❌ No encontré ese paquete o es privado, compa.' }, { quoted: m });
-
-        if (!pack.stickers || pack.stickers.length === 0) {
-            return sock.sendMessage(from, { text: `❌ El paquete \`${packName}\` está vacío.` }, { quoted: m });
+        if (!pack) {
+            return sock.sendMessage(from, { 
+                text: `《✧》 *SISTEMA* ❀\n\n◈ _No hallé el pack \`${packName}\` o es privado._` 
+            }, { quoted: m });
         }
 
-        await m.react('⏳');
+        if (!pack.stickers || pack.stickers.length === 0) {
+            return sock.sendMessage(from, { 
+                text: `《✧》 *ARCHIVO* ❀\n\n◈ _El paquete \`${packName}\` está vacío._` 
+            }, { quoted: m });
+        }
 
-        // 2. CONVERTIR BASE64 A BUFFERS VÁLIDOS
-        const validStickers = pack.stickers.map(s => {
+        await sock.sendMessage(from, { react: { text: '⏳', key: m.key } });
+
+        // 3. CONVERTIR BASE64 A BUFFERS (Limpio)
+        const stickerResults = pack.stickers.map(s => {
             try {
-                // Si guardaste el sticker como objeto con propiedad 'base64'
-                return Buffer.from(s.base64 || s, 'base64');
+                // Importante: Si s es un objeto, usamos s.base64, si no, s directo
+                const base64Data = s.base64 ? s.base64 : s;
+                return Buffer.from(base64Data, 'base64');
             } catch (e) {
                 return null;
             }
         }).filter(b => b && b.length > 0);
 
-        if (validStickers.length === 0) return sock.sendMessage(from, { text: '❌ Los stickers de este pack están corruptos.' });
+        if (stickerResults.length === 0) {
+            return sock.sendMessage(from, { text: '◈ _Error: Stickers corruptos en Atlas._' });
+        }
 
-        // 3. PREPARAR METADATOS (EXIF)
-        const webp = await import('node-webpmux');
-        const MAX_STICKERS = 50; // Límite de WhatsApp
-        const selected = validStickers.slice(0, MAX_STICKERS);
-
-        const stickerResults = await Promise.all(selected.map(async (buffer) => {
-            try {
-                const img = new webp.default.Image();
-                await img.load(buffer);
-                
-                const json = { 
-                    'sticker-pack-id': `CharlyBot-${pack.id}`, 
-                    'sticker-pack-name': pack.name, 
-                    'sticker-pack-publisher': pack.author || 'Charly-Bot 😎', 
-                    emojis: ['🎭'] 
-                };
-
-                const exifAttr = Buffer.from([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, 0x01, 0x00, 0x41, 0x57, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0x00, 0x00, 0x00]);
-                const jsonBuff = Buffer.from(JSON.stringify(json), 'utf-8');
-                const exif = Buffer.concat([exifAttr, jsonBuff]);
-                exif.writeUIntLE(jsonBuff.length, 14, 4);
-                img.exif = exif;
-
-                // Crear buffer final con metadatos
-                return await img.save(null); 
-            } catch {
-                return buffer; // Si falla el meta, mandamos el original
-            }
-        }));
-
-        // 4. ENVIAR EL PAQUETE COMPLETO
+        // 4. ENVIAR EL PAQUETE COMPLETO (Formato Yuki)
+        // Nota: Esto funciona si tu Baileys soporta 'stickerPack' o tienes el plugin
         await sock.sendMessage(from, { 
             stickerPack: { 
                 name: pack.name, 
-                publisher: pack.author, 
-                description: pack.desc, 
+                publisher: pack.author || 'Charly-Bot ', 
                 cover: stickerResults[0], 
                 stickers: stickerResults.map(s => ({ sticker: s }))
             } 
         }, { quoted: m });
 
-        await m.react('✔️');
+        await sock.sendMessage(from, { react: { text: '✅', key: m.key } });
 
     } catch (e) {
         console.error("Error en getpack:", e);
-        await m.react('✖️');
-        sock.sendMessage(from, { text: `> ❌ Error: [${e.message}]` }, { quoted: m });
+        sock.sendMessage(from, { text: `◈ _Error crítico: [${e.message}]_` }, { quoted: m });
     }
 }
 break;
