@@ -861,7 +861,7 @@ case 'brat': {
         // 2. Construimos la URL con tu API Key
         // Dejamos color y fondo vacíos para que use el verde clásico por defecto
         const apiKey = 'sylphy-ty5xtWm';
-        const urlBrat = `https://sylphyy.xyz/tools/brat?text=&color=&fondo=&type=${encodeURIComponent(text)}&color=&fondo=&type=&api_key=${apiKey}`;
+       const urlBrat = `https://sylphyy.xyz/tools/brat?text=${encodeURIComponent(text)}&api_key=sylphy-ty5xtWm`;
 
         // 3. Descargamos la imagen como Buffer
         const response = await axios.get(urlBrat, { responseType: 'arraybuffer' });
