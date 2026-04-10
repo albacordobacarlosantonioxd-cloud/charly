@@ -1045,7 +1045,7 @@ case 'ytaudio': case 'audio': {
         }, { quoted: m });
 
         // 4. LLAMADA A LA API (Sylphy)
-        const apiUrl = `https://sylphy.xyz/download/ytmp3?url=${encodeURIComponent(videoUrl)}&api_key=${SYLPHY_KEY}`;
+        const apiUrl = `https://sylphyy.xyz/download/v3/ytmp3?url=${encodeURIComponent(videoUrl)}&api_key=${SYLPHY_KEY}`;
         const res = await axios.get(apiUrl);
         const downloadUrl = res.data.result?.dl_url;
 
@@ -1119,7 +1119,7 @@ case 'video': case 'ytvideo': {
         }, { quoted: m });
 
         // 4. DESCARGA DESDE LA API
-        const res = await axios.get(`https://sylphy.xyz/download/ytmp4?url=${encodeURIComponent(videoUrl)}&api_key=sylphy-ty5xtWm`);
+        const res = await axios.get(`https://sylphyy.xyz/download/v2/ytmp4?url=${encodeURIComponent(videoUrl)}&api_key=sylphy-ty5xtWm`);
         const dl_url = res.data.result?.dl_url;
 
         if (dl_url) {
