@@ -1087,62 +1087,64 @@ case 'video': case 'ytvideo': {
         // 1. REACCIÓN DE "ESPERA"
         await sock.sendMessage(from, { react: { text: "⏳", key: m.key } });
 
-        // 2. OBTENER INFORMACIÓN (Link o Texto)
-        if (text.includes('youtu.be') || text.includes('youtube.com')) {
+        // 2. OBTENER INFORMACIÓN
+        if (text.match(/(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/)) {
             const videoId = yts.parseVideoId(text);
             videoData = await yts({ videoId: videoId });
         } else {
             const search = await yts(text);
-            if (!search.videos.length) {
+            if (!search || !search.videos.length) {
                 await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
                 return sock.sendMessage(from, { text: '❌ No hallé el video.' });
             }
             videoData = search.videos[0];
         }
 
+        // --- VALIDACIÓN DE DURACIÓN (1h 30min = 5400 segundos) ---
+        const segundosLimite = 5400;
+        if (videoData.seconds > segundosLimite) {
+            await sock.sendMessage(from, { react: { text: "⚠️", key: m.key } });
+            return sock.sendMessage(from, { text: `⚠️ El video es muy largo, pariente. El límite es de *1 Hora y 30 minutos*. Este dura: *${videoData.timestamp}*` });
+        }
+        // ---------------------------------------------------------
+
         const videoUrl = videoData.url;
         const videoTitle = videoData.title;
         const vistas = (videoData.views || 0).toLocaleString();
-        const canal = videoData.author?.name || 'Desconocido';
 
-        // 3. ENVIAR FICHA TÉCNICA (Miniatura + Info)
-        const infoMessage = `➩ Descargando Video › *${videoTitle}*
-
-> ❖ Canal › *${canal}*
-> ⴵ Duración › *${videoData.timestamp || '??:??'}*
-> ❀ Vistas › *${vistas}*
-> ✩ Publicado › *${videoData.ago || 'Reciente'}*
-> ❒ Enlace › *${videoUrl}*`;
+        // 3. ENVIAR FICHA TÉCNICA
+        const infoMessage = `➩ Descargando Video › *${videoTitle}*\n\n` +
+                          `> ❖ Canal › *${videoData.author?.name || 'Desconocido'}*\n` +
+                          `> ⴵ Duración › *${videoData.timestamp}*\n` +
+                          `> ❀ Vistas › *${vistas}*\n` +
+                          `> ❒ Enlace › *${videoUrl}*`;
 
         await sock.sendMessage(from, { 
             image: { url: videoData.image || videoData.thumbnail }, 
             caption: infoMessage 
         }, { quoted: m });
 
-        // 4. DESCARGA DESDE LA API
+        // 4. DESCARGA DESDE LA API (V2)
         const res = await axios.get(`https://sylphyy.xyz/download/v2/ytmp4?url=${encodeURIComponent(videoUrl)}&api_key=sylphy-ty5xtWm`);
         const dl_url = res.data.result?.dl_url;
 
         if (dl_url) {
             await sock.sendMessage(from, { 
-                video: { 
-                    url: dl_url,
-                    headers: { 'User-Agent': 'Mozilla/5.0' }
-                }, 
+                video: { url: dl_url }, 
                 caption: `✅ *${videoTitle}*`,
                 mimetype: 'video/mp4',
                 fileName: `${videoTitle}.mp4`
             }, { quoted: m });
 
-            // REACCIÓN DE "ÉXITO"
             await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
         } else {
-            throw new Error("No link");
+            throw new Error("La API no generó el link.");
         }
+
     } catch (e) {
         console.error("ERROR VIDEO:", e.message);
         await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
-        await sock.sendMessage(from, { text: '❌ Falló la descarga. Intenta de nuevo más tarde.' });
+        await sock.sendMessage(from, { text: '❌ Valio queso. El servidor está saturado o el video es privado.' });
     }
 }
 break;
