@@ -861,7 +861,7 @@ case 'brat': {
         // 2. Construimos la URL con tu API Key
         // Dejamos color y fondo vacíos para que use el verde clásico por defecto
         const apiKey = 'sylphy-ty5xtWm';
-        const urlBrat = `https://sylphy.xyz/tools/brat?text=${encodeURIComponent(text)}&color=&fondo=&type=&api_key=${apiKey}`;
+        const urlBrat = `https://sylphyy.xyz/tools/brat?text=&color=&fondo=&type=${encodeURIComponent(text)}&color=&fondo=&type=&api_key=${apiKey}`;
 
         // 3. Descargamos la imagen como Buffer
         const response = await axios.get(urlBrat, { responseType: 'arraybuffer' });
@@ -907,7 +907,7 @@ case 'fuck': {
         let textoMencion = personaEtiquetada ? `@${personaEtiquetada.split('@')[0]}` : "a todos";
 
         // 2. Llamada a la API con respuesta tipo 'arraybuffer' por si mandan el video directo
-        const response = await axios.get(`https://sylphy.xyz/reaction/fuck?api_key=${apiKey}`, {
+        const response = await axios.get(`https://sylphyy.xyz/reaction/fuck?api_key=${apiKey}`, {
             responseType: 'arraybuffer' 
         });
 
@@ -954,7 +954,7 @@ case 'r34': {
     
     try {
         const apiKey = 'sylphy-ty5xtWm';
-        const searchUrl = `https://sylphy.xyz/search/rule34?text=${encodeURIComponent(text)}&api_key=${apiKey}`;
+        const searchUrl = `https://sylphyy.xyz/search/rule34?text=${encodeURIComponent(text)}&api_key=${apiKey}`;
         
         const response = await axios.get(searchUrl);
         const res = response.data;
@@ -1368,24 +1368,6 @@ break;
 
 //////////
 
-// Comando: !nsfw on / !nsfw off
-if (command === 'nsfw') {
-    if (!isGroup) return reply('Este comando solo sirve en grupos.');
-    if (!isGroupAdmins) return reply('Solo los admins pueden usar esto, pariente.');
-    if (!args[0]) return reply('¿Qué onda? ¿Lo prendes o lo apagas? Usa: *!nsfw on* o *!nsfw off*');
-
-    const action = args[0].toLowerCase() === 'on'; // true si es 'on', false si es cualquier otra cosa
-
-    // Actualizamos MongoDB
-    await Group.updateOne(
-        { id: from }, 
-        { nsfw: action }, 
-        { upsert: true } // Esto crea el registro si el grupo es nuevo
-    );
-
-    const estado = action ? '✅ *Activado*: Ya pueden andar de puercos.' : '🚫 *Desactivado*: Modo santo activado.';
-    return sock.sendMessage(from, { text: estado }, { quoted: m });
-}
 
 ////////
 
@@ -1402,7 +1384,7 @@ case 'ig': case 'instagram': {
         await sock.sendMessage(from, { text: '⏳ Buscando el video... aguanta.' }, { quoted: m });
 
         // Intento con la API principal
-        let res = await axios.get(`https://sylphy.xyz/download/instagram?url=${encodeURIComponent(query)}&api_key=${apiKey}`);
+        let res = await axios.get(`https://sylphyy.xyz/download/igstory?url=${encodeURIComponent(query)}&api_key=${apiKey}`);
         let results = res.data.result || res.data.data || [];
 
         // Intento con la de respaldo si la primera falló
@@ -1724,7 +1706,7 @@ case 'hd': {
         // 3. Configuración del endpoint que te funcionó (UPSCALE)
         const apiKey = "sylphy-ty5xtWm";
         // Añadimos &scale=2 porque es lo que pide ese endpoint según tu captura
-        const apiUrl = `https://sylphy.xyz/tools/upscale?url=${encodeURIComponent(imageUrl)}&scale=2&api_key=${apiKey}`;
+        const apiUrl = `https://sylphyy.xyz/tools/upscale?url=${encodeURIComponent(imageUrl)}&scale=2&api_key=${apiKey}`;
 
         // 4. Petición con espera extendida pero directa
         const response = await axios.get(apiUrl, { timeout: 150000 });
