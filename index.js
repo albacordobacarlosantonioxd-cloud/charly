@@ -1124,31 +1124,36 @@ case 'video': case 'ytvideo': {
             caption: infoMessage 
         }, { quoted: m });
 
-        // 4. DESCARGA DESDE LA API (V2)
-        const res = await axios.get(`https://sylphyy.xyz/download/v2/ytmp4?url=${encodeURIComponent(videoUrl)}&api_key=sylphy-ty5xtWm`);
-        const dl_url = res.data.result?.dl_url;
+       // 4. DESCARGA DESDE LA API (V2)
+const res = await axios.get(`https://sylphyy.xyz/download/v2/ytmp4?url=${encodeURIComponent(videoUrl)}&api_key=sylphy-ty5xtWm`);
 
-        if (dl_url) {
-            await sock.sendMessage(from, { 
-                video: { url: dl_url }, 
-                caption: `✅ *${videoTitle}*`,
-                mimetype: 'video/mp4',
-                fileName: `${videoTitle}.mp4`
-            }, { quoted: m });
+// Validamos que la respuesta sea exitosa y tenga el link
+if (res.data.status && res.data.result?.dl_url) {
+    const dl_url = res.data.result.dl_url;
 
-            await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
-        } else {
-            throw new Error("La API no generó el link.");
-        }
+    // 5. ENVIAR EL VIDEO
+    await sock.sendMessage(from, { 
+        video: { url: dl_url }, 
+        caption: `✅ *${videoData.title}*\n\n> *Pariente, aquí tienes tu video.*`,
+        mimetype: 'video/mp4',
+        fileName: `${videoData.title}.mp4`
+    }, { quoted: m });
 
-    } catch (e) {
+    await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
+
+} else {
+    // Si la API responde status: false o el link no viene
+    await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
+    return sock.sendMessage(from, { text: '❌ El servidor de video no pudo procesar esta petición. Intenta con un video más corto.' });
+}
+
+} catch (e) {
         console.error("ERROR VIDEO:", e.message);
         await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
-        await sock.sendMessage(from, { text: '❌ Valio queso. El servidor está saturado o el video es privado.' });
+        await sock.sendMessage(from, { text: '❌ Valio queso, el servidor de descargas no responde.' });
     }
 }
 break;
-
 //////////
 
 
