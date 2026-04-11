@@ -1166,7 +1166,7 @@ case 'imagina': case 'draw': {
         await sock.sendMessage(from, { react: { text: "🎨", key: m.key } });
 
         // 2. LLAMADA A TU API EN RENDER
-        const apiUrl = `https://charly2-hhgu.onrender.com/api/generate?prompt=${encodeURIComponent(query)}`;
+        const apiUrl = 'https://sporting-wanting-creation.ngrok-free.dev/api/generate?prompt=' + encodeURIComponent(text);
         
         // Ponemos un timeout de 20 segundos por si Render está arrancando
         const res = await axios.get(apiUrl, { timeout: 20000 });
