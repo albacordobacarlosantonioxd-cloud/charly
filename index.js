@@ -1162,41 +1162,42 @@ case 'imagina': case 'draw': {
     if (!query) return sock.sendMessage(from, { text: '⚠️ ¡Epa! Escribe qué quieres que dibuje, pariente.' }, { quoted: m });
 
     try {
-        // 1. REACCIÓN INICIAL (🎨)
+        // 1. REACCIÓN DE ESPERA
         await sock.sendMessage(from, { react: { text: "🎨", key: m.key } });
 
         // 2. LLAMADA A TU PC (NGROK)
-        // Corregido: cambié 'text' por 'query' y la URL a la de tu ngrok
         const apiUrl = `https://sporting-wanting-creation.ngrok-free.dev/api/generate?prompt=${encodeURIComponent(query)}`;
         
+        // Timeout de 30s por si la generación está pesada
         const res = await axios.get(apiUrl, { timeout: 30000 });
 
-        // 3. LEER LA RESPUESTA DE TU PC
-        // Ajustado a: estado, autor y resultado (como tu JSON de la PC)
-        if (res.data.estado && res.data.resultado) {
+        // 3. VALIDACIÓN DEL JSON
+        // Basado en tu respuesta: {"status":true, "author":"YukiBot", "result":"..."}
+        if (res.data && res.data.status === true && res.data.result) {
             
-            // 4. ENVIAR LA IMAGEN
+            const urlImagen = res.data.result;
+            const creador = res.data.author || 'YukiBot';
+
+            // 4. ENVÍO DE LA IMAGEN AL WHATSAPP
             await sock.sendMessage(from, { 
-                image: { url: res.data.resultado }, 
-                caption: `*Aquí tienes tu dibujo, pariente:*\n> "${query}"\n\n*Servidor:* Local-PC 💻\n*By:* ${res.data.autor || 'YukiBot'}`
+                image: { url: urlImagen }, 
+                caption: `*Aquí tienes tu dibujo, pariente:*\n> "${query}"\n\n*By:* ${creador}`
             }, { quoted: m });
 
             await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
-            console.log(`[✅] Imagen generada en PC para: ${query}`);
 
         } else {
-            throw new Error("La PC no soltó el link de la imagen.");
+            throw new Error("El servidor de la PC no mandó un link válido.");
         }
 
     } catch (e) {
         console.error("ERROR EN IMAGINA:", e.message);
         await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
         
-        if (e.code === 'ECONNABORTED') {
-            await sock.sendMessage(from, { text: '❌ La PC se tardó mucho en responder. Checa el internet, pariente.' });
-        } else {
-            await sock.sendMessage(from, { text: `❌ Valio queso, pariente. Error: ${e.message}` });
-        }
+        let msgError = `❌ Hubo un fallo: ${e.message}`;
+        if (e.code === 'ECONNABORTED') msgError = '❌ La PC tardó mucho tiempo. ¿Sigue prendido el ngrok?';
+        
+        await sock.sendMessage(from, { text: msgError }, { quoted: m });
     }
 }
 break;
