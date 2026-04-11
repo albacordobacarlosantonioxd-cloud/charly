@@ -1087,73 +1087,68 @@ case 'video': case 'ytvideo': {
         const axios = require('axios');
         let videoData = null;
 
-        // 1. REACCIÓN DE "ESPERA"
         await sock.sendMessage(from, { react: { text: "⏳", key: m.key } });
 
-        // 2. OBTENER INFORMACIÓN
+        // 1. BUSCAR INFORMACIÓN
         if (text.match(/(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/)) {
             const videoId = yts.parseVideoId(text);
             videoData = await yts({ videoId: videoId });
         } else {
             const search = await yts(text);
             if (!search || !search.videos.length) {
-                await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
                 return sock.sendMessage(from, { text: '❌ No hallé el video.' });
             }
             videoData = search.videos[0];
         }
 
-        // --- VALIDACIÓN DE DURACIÓN (1h 30min = 5400 segundos) ---
-        const segundosLimite = 5400;
-        if (videoData.seconds > segundosLimite) {
-            await sock.sendMessage(from, { react: { text: "⚠️", key: m.key } });
-            return sock.sendMessage(from, { text: `⚠️ El video es muy largo, pariente. El límite es de *1 Hora y 30 minutos*. Este dura: *${videoData.timestamp}*` });
+        // Validación de duración
+        if (videoData.seconds > 5400) {
+            return sock.sendMessage(from, { text: `⚠️ Muy largo. El límite es 1h 30min.` });
         }
-        // ---------------------------------------------------------
 
-        const videoUrl = videoData.url;
-        const videoTitle = videoData.title;
-        const vistas = (videoData.views || 0).toLocaleString();
-
-        // 3. ENVIAR FICHA TÉCNICA
-        const infoMessage = `➩ Descargando Video › *${videoTitle}*\n\n` +
-                          `> ❖ Canal › *${videoData.author?.name || 'Desconocido'}*\n` +
-                          `> ⴵ Duración › *${videoData.timestamp}*\n` +
-                          `> ❀ Vistas › *${vistas}*\n` +
-                          `> ❒ Enlace › *${videoUrl}*`;
-
+        // Enviar miniatura primero
         await sock.sendMessage(from, { 
             image: { url: videoData.image || videoData.thumbnail }, 
-            caption: infoMessage 
+            caption: `➩ Descargando: *${videoData.title}*\n> Duración: *${videoData.timestamp}*` 
         }, { quoted: m });
 
-       // 4. DESCARGA DESDE LA API (V2)
-const res = await axios.get(`https://sylphyy.xyz/download/v2/ytmp4?url=${encodeURIComponent(videoUrl)}&api_key=sylphy-ty5xtWm`);
+        // --- INICIO DE DIAGNÓSTICO EN VIVO ---
+        await sock.sendMessage(from, { text: '📡 _Paso 1: Solicitando link al servidor..._' });
 
-// Validamos que la respuesta sea exitosa y tenga el link
-if (res.data.status && res.data.result?.dl_url) {
-    const dl_url = res.data.result.dl_url;
+        try {
+            const res = await axios.get(`https://sylphyy.xyz/download/v2/ytmp4?url=${encodeURIComponent(videoData.url)}&api_key=sylphy-ty5xtWm`, {
+                timeout: 30000 
+            });
 
-    // 5. ENVIAR EL VIDEO
-    await sock.sendMessage(from, { 
-        video: { url: dl_url }, 
-        caption: `✅ *${videoData.title}*\n\n> *Pariente, aquí tienes tu video.*`,
-        mimetype: 'video/mp4',
-        fileName: `${videoData.title}.mp4`
-    }, { quoted: m });
+            if (res.data && res.data.status && res.data.result?.dl_url) {
+                const dl_url = res.data.result.dl_url;
+                await sock.sendMessage(from, { text: '🔗 _Paso 2: Link obtenido. Intentando envío final..._' });
 
-    await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
+                // ENVIAR EL VIDEO
+                await sock.sendMessage(from, { 
+                    video: { url: dl_url }, 
+                    caption: `✅ *${videoData.title}*`,
+                    mimetype: 'video/mp4',
+                    fileName: `${videoData.title}.mp4`
+                }, { quoted: m });
 
-} else {
-    // Si la API responde status: false o el link no viene
-    await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
-    return sock.sendMessage(from, { text: '❌ El servidor de video no pudo procesar esta petición. Intenta con un video más corto.' });
-}
+                await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
 
-} catch (e) {
-        console.error("ERROR VIDEO:", e.message);
-        await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
-        await sock.sendMessage(from, { text: '❌ Valio queso, el servidor de descargas no responde.' });
+            } else {
+                // El servidor respondió pero no hay link
+                let rawRes = JSON.stringify(res.data).substring(0, 500);
+                return sock.sendMessage(from, { text: `❌ _Error del Servidor:_ No devolvió link de descarga.\n\n*Respuesta:* ${rawRes}` });
+            }
+
+        } catch (apiErr) {
+            // Error de conexión con la API
+            let errInfo = `❌ *Fallo de Conexión:*\n> Mensaje: ${apiErr.message}\n> Código: ${apiErr.code || 'N/A'}`;
+            return sock.sendMessage(from, { text: errInfo });
+        }
+
+    } catch (e) {
+        console.error(e);
+        return sock.sendMessage(from, { text: `❌ *Error General:* ${e.message}` });
     }
 }
 break;
