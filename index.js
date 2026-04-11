@@ -1155,8 +1155,7 @@ break;
 //////////
 
 
-case 'iamg':
-{
+case 'imagina': {
     if (!text) return m.reply(`*¡Te faltó el prompt, wey!* Ejemplo: ${prefix + command} una yamaha mt09 neon`);
 
     try {
@@ -1164,7 +1163,6 @@ case 'iamg':
         await m.reply('*Espera un poco, pariente... YukiBot está generando tu imagen... 🎨*');
 
         // 2. Llamamos a tu API de Render
-        // Usamos encodeURIComponent para que los espacios y emojis no rompan el link
         const response = await axios.get(`https://charly2-hhgu.onrender.com/api/generate?prompt=${encodeURIComponent(text)}`);
         const data = response.data;
 
