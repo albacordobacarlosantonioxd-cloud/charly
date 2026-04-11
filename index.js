@@ -1157,50 +1157,49 @@ break;
 
 case 'imagina': case 'draw': {
     const axios = require('axios');
-    const query = args.join(' '); // Usamos args como en tu comando de audio
+    const query = args.join(' '); 
 
     if (!query) return sock.sendMessage(from, { text: '⚠️ ¡Epa! Escribe qué quieres que dibuje, pariente.' }, { quoted: m });
 
     try {
-        // 1. REACCIÓN INICIAL (⏳)
+        // 1. REACCIÓN INICIAL (🎨)
         await sock.sendMessage(from, { react: { text: "🎨", key: m.key } });
 
-        // 2. LLAMADA A TU API EN RENDER
-        const apiUrl = 'https://sporting-wanting-creation.ngrok-free.dev/api/generate?prompt=' + encodeURIComponent(text);
+        // 2. LLAMADA A TU PC (NGROK)
+        // Corregido: cambié 'text' por 'query' y la URL a la de tu ngrok
+        const apiUrl = `https://sporting-wanting-creation.ngrok-free.dev/api/generate?prompt=${encodeURIComponent(query)}`;
         
-        // Ponemos un timeout de 20 segundos por si Render está arrancando
-        const res = await axios.get(apiUrl, { timeout: 20000 });
+        const res = await axios.get(apiUrl, { timeout: 30000 });
 
-        if (res.data.status && res.data.result) {
-            // 3. ENVIAR LA IMAGEN
+        // 3. LEER LA RESPUESTA DE TU PC
+        // Ajustado a: estado, autor y resultado (como tu JSON de la PC)
+        if (res.data.estado && res.data.resultado) {
+            
+            // 4. ENVIAR LA IMAGEN
             await sock.sendMessage(from, { 
-                image: { url: res.data.result }, 
-                caption: `*Aquí tienes tu dibujo, pariente:*\n> "${query}"\n\n*Servidor:* Charly2-Render`
+                image: { url: res.data.resultado }, 
+                caption: `*Aquí tienes tu dibujo, pariente:*\n> "${query}"\n\n*Servidor:* Local-PC 💻\n*By:* ${res.data.autor || 'YukiBot'}`
             }, { quoted: m });
 
-            // 4. REACCIÓN DE ÉXITO (✅)
             await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
-            console.log(`[✅] Imagen generada para: ${query}`);
+            console.log(`[✅] Imagen generada en PC para: ${query}`);
 
         } else {
-            await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
-            return sock.sendMessage(from, { text: '❌ La API no pudo generar la imagen. Intenta con otro texto.' });
+            throw new Error("La PC no soltó el link de la imagen.");
         }
 
     } catch (e) {
         console.error("ERROR EN IMAGINA:", e.message);
         await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
         
-        // Mensaje de error personalizado por si Render está dormido
-        if (e.code === 'ECONNABORTED' || e.message.includes('503')) {
-            await sock.sendMessage(from, { text: '❌ El servidor de Render se tardó en despertar. Intenta de nuevo en 15 segundos.' });
+        if (e.code === 'ECONNABORTED') {
+            await sock.sendMessage(from, { text: '❌ La PC se tardó mucho en responder. Checa el internet, pariente.' });
         } else {
             await sock.sendMessage(from, { text: `❌ Valio queso, pariente. Error: ${e.message}` });
         }
     }
 }
 break;
-
 //////
 
 
