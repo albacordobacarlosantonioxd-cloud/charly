@@ -1155,6 +1155,38 @@ break;
 //////////
 
 
+case 'iamg':
+{
+    if (!text) return m.reply(`*¡Te faltó el prompt, wey!* Ejemplo: ${prefix + command} una yamaha mt09 neon`);
+
+    try {
+        // 1. Avisamos al usuario
+        await m.reply('*Espera un poco, pariente... YukiBot está generando tu imagen... 🎨*');
+
+        // 2. Llamamos a tu API de Render
+        // Usamos encodeURIComponent para que los espacios y emojis no rompan el link
+        const response = await axios.get(`https://charly2-hhgu.onrender.com/api/generate?prompt=${encodeURIComponent(text)}`);
+        const data = response.data;
+
+        if (data.status) {
+            // 3. Enviamos la imagen con su leyenda
+            await conn.sendMessage(m.chat, { 
+                image: { url: data.result }, 
+                caption: `*Resultado para:* "${text}"\n\n*Servidor:* Charly2-Render`
+            }, { quoted: m });
+        } else {
+            m.reply('*La API de Render no pudo generar la imagen, intenta con otro prompt.*');
+        }
+    } catch (e) {
+        console.error(e);
+        m.reply('*¡No mames! El servidor de Render está dormido o hubo un error. Intenta en 30 segundos.*');
+    }
+}
+break;
+
+//////
+
+
 case 'kill':
 case 'matar': {
     
