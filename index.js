@@ -816,33 +816,41 @@ break;
 
 ///////////
 case 'letra': case 'lyrics': {
-    if (!text) return sock.sendMessage(from, { text: '¿De qué rola quieres la letra, pariente? Ejemplo: .letra El Azul' });
+    // Usamos 'text' o 'args.join' dependiendo de cómo esté configurado tu bot
+    const q = text || args.join(' '); 
+    if (!q) return sock.sendMessage(from, { text: '¿De qué rola quieres la letra, pariente? Ejemplo: .letra El Azul' });
 
     try {
         const axios = require('axios');
         const apiKey = 'sylphy-ty5xtWm';
         
-        // Avisamos que estamos buscando
-        await sock.sendMessage(from, { text: '🔍 *Buscando la letra...* Aguanta.' });
+        await sock.sendMessage(from, { react: { text: "🎶", key: m.key } });
 
-        // 1. Hacemos la petición a Sylphy
-        const response = await axios.get(`https://sylphy.xyz/search/lyrics?title=${encodeURIComponent(text)}&api_key=${apiKey}`);
+        // 1. Petición a la API
+        const response = await axios.get(`https://sylphy.xyz/search/lyrics?title=${encodeURIComponent(q)}&api_key=${apiKey}`);
 
-        // 2. Extraemos los datos (Ajustado a como suelen responder estas APIs)
-        const data = response.data.result || response.data; 
+        // 2. Extraer datos (manejando si viene en 'result' o directo)
+        const data = response.data.result || response.data;
 
+        // Si la letra no existe o el status es falso
         if (!data || !data.lyrics) {
-            return sock.sendMessage(from, { text: `❌ No hallé la letra de *${text}*. Intenta con el nombre del artista también.` });
+            await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
+            return sock.sendMessage(from, { text: `❌ No hallé la letra de *${q}*. Intenta poniendo Artista - Canción.` });
         }
 
-        // 3. Formateamos el mensaje
-        const mensajeLetra =  `${data.lyrics}\n\n` 
-                             
+        // 3. Formatear mensaje con Título y Artista si están disponibles
+        const titulo = data.title || q.toUpperCase();
+        const artista = data.artist || 'Desconocido';
+        
+        const mensajeLetra = `🎵 *${titulo}*\n👤 *${artista}*\n\n${data.lyrics}\n\n*By: YukiBot*`;
+
         await sock.sendMessage(from, { text: mensajeLetra }, { quoted: m });
+        await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
 
     } catch (e) {
         console.error("ERROR LYRICS:", e.message);
-        await sock.sendMessage(from, { text: '❌ no encontre la letra.' });
+        await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
+        await sock.sendMessage(from, { text: '❌ Hubo un error al buscar la letra. Intenta más tarde.' });
     }
 }
 break;
