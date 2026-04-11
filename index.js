@@ -1155,29 +1155,48 @@ break;
 //////////
 
 
-case 'imagina': {
-    if (!text) return m.reply(`*¡Te faltó el prompt, wey!* Ejemplo: ${prefix + command} una yamaha mt09 neon`);
+case 'imagina': case 'draw': {
+    const axios = require('axios');
+    const query = args.join(' '); // Usamos args como en tu comando de audio
+
+    if (!query) return sock.sendMessage(from, { text: '⚠️ ¡Epa! Escribe qué quieres que dibuje, pariente.' }, { quoted: m });
 
     try {
-        // 1. Avisamos al usuario
-        await m.reply('*Espera un poco, pariente... YukiBot está generando tu imagen... 🎨*');
+        // 1. REACCIÓN INICIAL (⏳)
+        await sock.sendMessage(from, { react: { text: "🎨", key: m.key } });
 
-        // 2. Llamamos a tu API de Render
-        const response = await axios.get(`https://charly2-hhgu.onrender.com/api/generate?prompt=${encodeURIComponent(text)}`);
-        const data = response.data;
+        // 2. LLAMADA A TU API EN RENDER
+        const apiUrl = `https://charly2-hhgu.onrender.com/api/generate?prompt=${encodeURIComponent(query)}`;
+        
+        // Ponemos un timeout de 20 segundos por si Render está arrancando
+        const res = await axios.get(apiUrl, { timeout: 20000 });
 
-        if (data.status) {
-            // 3. Enviamos la imagen con su leyenda
-            await conn.sendMessage(m.chat, { 
-                image: { url: data.result }, 
-                caption: `*Resultado para:* "${text}"\n\n*Servidor:* Charly2-Render`
+        if (res.data.status && res.data.result) {
+            // 3. ENVIAR LA IMAGEN
+            await sock.sendMessage(from, { 
+                image: { url: res.data.result }, 
+                caption: `*Aquí tienes tu dibujo, pariente:*\n> "${query}"\n\n*Servidor:* Charly2-Render`
             }, { quoted: m });
+
+            // 4. REACCIÓN DE ÉXITO (✅)
+            await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
+            console.log(`[✅] Imagen generada para: ${query}`);
+
         } else {
-            m.reply('*La API de Render no pudo generar la imagen, intenta con otro prompt.*');
+            await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
+            return sock.sendMessage(from, { text: '❌ La API no pudo generar la imagen. Intenta con otro texto.' });
         }
+
     } catch (e) {
-        console.error(e);
-        m.reply('*¡No mames! El servidor de Render está dormido o hubo un error. Intenta en 30 segundos.*');
+        console.error("ERROR EN IMAGINA:", e.message);
+        await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
+        
+        // Mensaje de error personalizado por si Render está dormido
+        if (e.code === 'ECONNABORTED' || e.message.includes('503')) {
+            await sock.sendMessage(from, { text: '❌ El servidor de Render se tardó en despertar. Intenta de nuevo en 15 segundos.' });
+        } else {
+            await sock.sendMessage(from, { text: `❌ Valio queso, pariente. Error: ${e.message}` });
+        }
     }
 }
 break;
@@ -1826,42 +1845,7 @@ case 'vocal': case 'separate': {
 break;
 ////////////
 
- case 'imagine': case 'generar': {
-    const axios = require('axios');
-    const prompt = args.join(' ');
 
-    if (!prompt) return await sock.sendMessage(from, { 
-        text: `《✧》 Describe la imagen que quieres crear.\n✐ Ejemplo: .ia una moto MT09 en el espacio` 
-    }, { quoted: m });
-
-    await sock.sendMessage(from, { text: '`⏳ Generando imagen... esto puede tardar unos segundos.`' }, { quoted: m });
-
-    try {
-        const response = await axios.get(`https://apis-starlights-team.koyeb.app/starlight/txt-to-image2?text=${encodeURIComponent(prompt)}`);
-        
-        // --- DEPURACIÓN: Esto imprimirá la respuesta real en tu consola ---
-        console.log("Respuesta de la API:", JSON.stringify(response.data, null, 2));
-
-        // Buscamos el link en todas las opciones posibles que suelen usar estas APIs
-        const imgUrl = response.data.result || response.data.url || response.data.status || response.data.link;
-
-        if (!imgUrl || typeof imgUrl !== 'string') {
-            throw new Error('La API no devolvió un link válido.');
-        }
-
-        await sock.sendMessage(from, { 
-            image: { url: imgUrl }, 
-            caption: `✨ *Imagen Generada* ✨\n> ✎ *Prompt:* ${prompt}` 
-        }, { quoted: m });
-
-    } catch (e) {
-        console.error("Error detallado:", e.message);
-        await sock.sendMessage(from, { 
-            text: `> ❌ Error: No se pudo generar. Intenta con un texto más corto o en inglés.` 
-        }, { quoted: m });
-    }
-}
-break;
 //////
 
 case 'ia': case 'llama': case 'chatgpt': {
@@ -1931,47 +1915,6 @@ break;
 
 ////////
 
-case 'imagen':
-case 'google':
-case 'img': {
-    // 1. Validamos que haya texto después del comando
-    if (!text) return sock.sendMessage(from, { text: `¿Qué buscamos en Google Imágenes? Ejemplo: ${usedPrefix + command} yamaha mt09` });
-
-    try {
-        const axios = require('axios');
-        const apiKey = "sylphy-ty5xtWm";
-        // 2. Hacemos la petición a la API de Sylphy
-        const response = await axios.get(`https://sylphy.xyz/search/image?q=${encodeURIComponent(text)}&api_key=${apiKey}`);
-        
-        // 3. La API de Sylphy devuelve directamente un array [], así que validamos la data
-        const results = response.data;
-
-        if (!results || !Array.isArray(results) || results.length === 0) {
-            return sock.sendMessage(from, { text: `❌ No encontré imágenes para: *${text}*` });
-        }
-
-        // 4. Avisamos que estamos buscando (opcional, para que el usuario no desespere)
-        await sock.sendMessage(from, { text: `⏳ Buscando 3 imágenes de: *${text}*...` });
-
-        // 5. Tomamos las primeras 3 imágenes del array
-        const top3 = results.slice(0, 3);
-
-        // 6. Enviamos las 3 imágenes una por una
-        for (const item of top3) {
-            if (item.url) {
-                await sock.sendMessage(from, { 
-                    image: { url: item.url }, 
-                    caption: `✅ *Resultado:* ${text}\n🌐 *Fuente:* ${item.source || 'Google'}` 
-                }, { quoted: m });
-            }
-        }
-
-    } catch (e) {
-        console.error("ERROR GOOGLE IMG:", e);
-        await sock.sendMessage(from, { text: '❌ Hubo un fallo al conectar con la API de imágenes.' });
-    }
-}
-break; 
 
 
 ///////
