@@ -853,38 +853,41 @@ case 'brat': {
 
     try {
         const axios = require('axios');
-        const { Sticker, createSticker, StickerTypes } = require('wa-sticker-formatter'); // Asegúrate de tener esta librería
+        const { Sticker, StickerTypes } = require('wa-sticker-formatter');
 
-        // 1. Aviso de que el bot está "chambeando"
-        await sock.sendMessage(from, { text: '🎨 *Cocinando tu sticker estilo Brat...*' });
+        await sock.sendMessage(from, { react: { text: "🎨", key: m.key } });
 
-        // 2. Construimos la URL con tu API Key
-        // Dejamos color y fondo vacíos para que use el verde clásico por defecto
         const apiKey = 'sylphy-ty5xtWm';
-       const urlBrat = `https://sylphyy.xyz/tools/brat?text=${encodeURIComponent(text)}&api_key=sylphy-ty5xtWm`;
+        const urlBrat = `https://sylphyy.xyz/tools/brat?text=${encodeURIComponent(text)}&api_key=${apiKey}`;
 
-        // 3. Descargamos la imagen como Buffer
+        // Descargamos la imagen
         const response = await axios.get(urlBrat, { responseType: 'arraybuffer' });
-        const buffer = Buffer.from(response.data, 'utf-8');
+        
+        // Validamos que lo recibido sea una imagen (no un error)
+        if (response.headers['content-type'].includes('application/json')) {
+            return sock.sendMessage(from, { text: '❌ La API mandó un error. Revisa tu API Key.' });
+        }
 
-        // 4. Convertimos a Sticker (usando wa-sticker-formatter)
+        const buffer = Buffer.from(response.data);
+
+        // Configuramos el sticker
         const sticker = new Sticker(buffer, {
-            pack: 'Pack Maestro', // Nombre del paquete
-            author: 'Bot Maestro', // Tu nombre
+            pack: 'Brat Pack', 
+            author: 'Master Bot', 
             type: StickerTypes.FULL,
-            categories: ['🤩', '✨'],
-            id: '12345',
-            quality: 70,
+            quality: 80,
         });
 
         const stickerBuffer = await sticker.toBuffer();
 
-        // 5. Enviamos el sticker final
+        // Enviamos
         await sock.sendMessage(from, { sticker: stickerBuffer }, { quoted: m });
+        await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
 
     } catch (e) {
         console.error("ERROR BRAT:", e.message);
-        await sock.sendMessage(from, { text: '❌ No pude crear el sticker. Revisa si la frase es muy larga o si la API anda caída.' });
+        await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
+        await sock.sendMessage(from, { text: '❌ Valio queso. Intenta con un texto más corto o revisa tu conexión.' });
     }
 }
 break;
