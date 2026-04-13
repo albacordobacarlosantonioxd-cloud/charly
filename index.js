@@ -816,7 +816,6 @@ break;
 
 ///////////
 case 'letra': case 'lyrics': {
-    // Usamos 'text' o 'args.join' dependiendo de cómo esté configurado tu bot
     const q = text || args.join(' '); 
     if (!q) return sock.sendMessage(from, { text: '¿De qué rola quieres la letra, pariente? Ejemplo: .letra El Azul' });
 
@@ -827,18 +826,17 @@ case 'letra': case 'lyrics': {
         await sock.sendMessage(from, { react: { text: "🎶", key: m.key } });
 
         // 1. Petición a la API
-        const response = await axios.get(`https://sylphy.xyz/search/lyrics?title=${encodeURIComponent(q)}&api_key=${apiKey}`);
+        const response = await axios.get(`https://sylphyy.xyz/search/lyrics?title=${encodeURIComponent(q)}&api_key=${apiKey}`);
 
-        // 2. Extraer datos (manejando si viene en 'result' o directo)
+        // 2. Extraer datos
         const data = response.data.result || response.data;
 
-        // Si la letra no existe o el status es falso
         if (!data || !data.lyrics) {
             await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
             return sock.sendMessage(from, { text: `❌ No hallé la letra de *${q}*. Intenta poniendo Artista - Canción.` });
         }
 
-        // 3. Formatear mensaje con Título y Artista si están disponibles
+        // 3. Formatear mensaje
         const titulo = data.title || q.toUpperCase();
         const artista = data.artist || 'Desconocido';
         
