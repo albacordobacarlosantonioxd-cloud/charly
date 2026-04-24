@@ -19,7 +19,7 @@ async function uploadAudio(buffer) {
         return res.data;
     } catch (err) {
         console.error('Error al subir audio a Catbox:', err);
-        throw new Error('No se pudo subir el audio a internet, compa.');
+        throw new Error(`No se pudo subir el audio a internet: ${err.message}`);
     }
 }
 
@@ -45,9 +45,10 @@ module.exports = {
             const audioUrl = await uploadAudio(buffer); 
 
             const response = await axios.get(`https://api.stellarwa.xyz/tools/vocalremover?url=${encodeURIComponent(audioUrl)}&key=api-qG4nw`);
+            console.log('API Response:', response.data); // Log full API response
             const json = response.data;
 
-            if (json.status && json.vocal) {
+            if (json && json.status === 'success' && json.vocal) {
                 await sock.sendMessage(from, { 
                     audio: { url: json.vocal }, 
                     mimetype: 'audio/mpeg',
@@ -70,7 +71,7 @@ module.exports = {
 
         } catch (e) {
             console.error("Error:", e);
-            sock.sendMessage(from, { text: "❌ Hubo un error en el proceso." });
+            sock.sendMessage(from, { text: `❌ Hubo un error: ${e.message}` });
         }
     }
 };
