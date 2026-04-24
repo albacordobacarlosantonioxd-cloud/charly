@@ -54,6 +54,9 @@ module.exports = {
 ◈ .nsfwmenu
 > Accede al menú de contenido restringido (+18).
 
+◈ .antilink
+> Activa o desactiva la protección de enlaces en grupos.
+
 《✧》 *STICKERS & PACKS*
 
 ◈ .s / .sticker

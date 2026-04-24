@@ -6,7 +6,7 @@ module.exports = {
         try {
             const yts = require('yt-search');
             const axios = require('axios');
-            const apiKey = 'sylphy-ty5xtWm';
+            const apiKey = process.env.SYLPHY_KEY; 
 
             const search = await yts(text);
             if (!search || !search.videos.length) return sock.sendMessage(from, { text: '❌ No hallé nada.' });

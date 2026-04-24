@@ -7,7 +7,7 @@ module.exports = {
         if (!text) return sock.sendMessage(from, { text: "¿Qué onda, pariente? Suéltame tu duda para el Copilot." });
 
         try {
-            const key = "evogb-WcaOh0yE"; // Tu llave de la API
+            const key = process.env.MISTRAL_API_KEY; 
             const urlFinal = `https://api.evogb.org/ai/copilot?text=${encodeURIComponent(text)}&key=${key}`;
 
             const response = await axios.get(urlFinal);
