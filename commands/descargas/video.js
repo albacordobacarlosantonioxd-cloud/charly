@@ -31,8 +31,6 @@ module.exports = {
                 caption: `➩ Descargando: *${videoData.title}*\n> Duración: *${videoData.timestamp}*` 
             }, { quoted: m });
 
-            await sock.sendMessage(from, { text: '📡 _Paso 1: Solicitando link al servidor..._' });
-
             try {
                 const res = await axios.get(
                     `https://sylphyy.xyz/download/v2/ytmp4?url=${encodeURIComponent(videoData.url)}&q=720p&api_key=sylphy-ty5xtWm`,
@@ -41,7 +39,6 @@ module.exports = {
 
                 if (res.data && res.data.status && res.data.result?.dl_url) {
                     const dl_url = res.data.result.dl_url;
-                    await sock.sendMessage(from, { text: '🔗 _Paso 2: Link obtenido. Intentando envío final..._' });
 
                     await sock.sendMessage(from, { 
                         video: { url: dl_url }, 
