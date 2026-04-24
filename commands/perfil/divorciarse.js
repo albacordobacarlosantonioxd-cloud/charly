@@ -1,4 +1,4 @@
-const User = require('../models/User');
+const User = require('../../models/User');
 
 async function handleDivorce(sender, from, m, sock) {
     // 1. Buscamos al usuario que pide el divorcio en Mongo

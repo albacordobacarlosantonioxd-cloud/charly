@@ -1,4 +1,4 @@
-const Group = require("../../index.js").Group;
+const Group = require('../../models/Group');
 
 module.exports = {
     name: "antilink",
@@ -30,7 +30,7 @@ module.exports = {
     middleware: async (sock, m, from, isGroup) => {
         if (!isGroup) return;
 
-        const Group = require("../../index.js").Group;
+const Group = require('../../models/Group');
         const groupConfig = await Group.findOne({ id: from });
 
         if (groupConfig && groupConfig.antilink) {
