@@ -50,6 +50,7 @@ async function uploadImage(buffer) {
 
 export default {
     name: "hd",
+    category: 'herramientas',
     run: async (sock, m, from, text, quoted) => {
         try {
             const isQuotedImage = quoted?.imageMessage;

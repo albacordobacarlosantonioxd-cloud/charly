@@ -86,6 +86,7 @@ async function run(sock, m, from, text, quoted, args, isAdmin, isGroup) {
 
 export default {
   name: 'marry',
+    category: 'perfil',
   aliases: ['casarse', 'proponer'],
   run
 };

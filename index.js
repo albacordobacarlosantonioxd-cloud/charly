@@ -85,10 +85,8 @@ const loadCommands = async (dir = "./commands") => {
     for (const file of files) {
         const filePath = path.join(dir, file);
         if (fs.statSync(filePath).isDirectory()) {
-            console.log(`📂 Entrando a carpeta: ${filePath}`);
             await loadCommands(filePath);
         } else if (file.endsWith(".js")) {
-            console.log(`⏳ Cargando: ${filePath} ...`);
             try {
                 const module = await import(pathToFileURL(path.resolve(filePath)).href);
                 const command = module.default || module;
@@ -101,9 +99,6 @@ const loadCommands = async (dir = "./commands") => {
                     if (Array.isArray(command.command)) {
                         command.command.forEach(cmd => commands.set(cmd, command));
                     }
-                    console.log(`✅ Cargado: ${name}`);
-                } else {
-                    console.warn(`⚠️ Sin nombre: ${filePath}`);
                 }
             } catch (e) {
                 console.error(`❌ Error cargando comando en ${filePath}:`, e.message || e);
@@ -205,9 +200,7 @@ export { User, Group, Pack, app, commands, sock, db };
 
 // Retrasamos la carga de comandos para evitar dependencias circulares (los comandos importan index.js)
 setImmediate(async () => {
-    console.log("🔄 Iniciando carga de comandos...");
     await loadCommands();
-    console.log(`📂 ${commands.size} comandos cargados correctamente`);
     if (process.env.TEST_MODE !== 'true') {
         startBot();
     }

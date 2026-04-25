@@ -1,5 +1,6 @@
 export default {
     name: "demote",
+    category: 'grupos',
     run: async (sock, m, from, text, quoted, args, isAdmin, isGroup) => {
         if (!isGroup) {
             return sock.sendMessage(from, { text: "Este comando solo funciona en grupos." }, { quoted: m });

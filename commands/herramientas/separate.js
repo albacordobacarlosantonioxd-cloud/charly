@@ -26,6 +26,7 @@ async function uploadAudio(buffer) {
 
 export default {
     name: 'separate',
+    category: 'herramientas',
     aliases: ['vocal', 'separe'],
     run: async (sock, m, from, text, quoted) => {
         const isAudio = m.message.audioMessage || quoted?.audioMessage;

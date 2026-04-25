@@ -2,6 +2,7 @@ import axios from "axios";
 
 export default {
     name: "flux",
+    category: 'ia',
     run: async (sock, m, from, text, quoted, args) => {
         if (!text) return sock.sendMessage(from, { text: '¿Qué quieres que cree la IA? Ejemplo: .ia un astronauta en Marte' });
 

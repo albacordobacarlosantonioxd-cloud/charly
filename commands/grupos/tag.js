@@ -1,5 +1,6 @@
 export default {
     name: "tag",
+    category: 'grupos',
     run: async (sock, m, from, text, quoted, args, isAdmin) => {
         if (!isAdmin) return;
         

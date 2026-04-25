@@ -2,6 +2,7 @@ import axios from 'axios';
 
 export default {
     name: 'kiss',
+    category: 'herramientas',
     aliases: ['hug', 'slap'],
     run: async (sock, m, from, text, quoted, args, isAdmin, isGroup, sender) => {
         const body = m.message?.conversation || m.message?.extendedTextMessage?.text || m.message?.imageMessage?.caption || "";

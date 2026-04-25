@@ -2,6 +2,7 @@ import { User } from "../../index.js";
 
 export default {
   name: 'setgenre',
+    category: 'perfil',
   aliases: ['setgenero'],
   run: async (sock, m, from, text, quoted, args, isAdmin, isGroup) => {
     const sender = m.sender;

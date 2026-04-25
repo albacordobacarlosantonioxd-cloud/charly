@@ -4,6 +4,7 @@ import { safeReact } from '../../global.js';
 
 export default {
     name: 'video',
+    category: 'descargas',
     aliases: ['ytvideo'],
     run: async (sock, m, from, text, quoted) => {
         if (!text) return sock.sendMessage(from, { text: '¿Qué video buscamos, pariente? Pasa el nombre o link.' });

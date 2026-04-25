@@ -2,6 +2,7 @@ import axios from "axios";
 
 export default {
     name: "copilot",
+    category: 'ia',
     aliases: ["cop"],
     run: async (sock, m, from, text, quoted, args) => {
         if (!text) return sock.sendMessage(from, { text: "¿Qué onda, pariente? Suéltame tu duda para el Copilot." });

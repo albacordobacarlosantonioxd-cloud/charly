@@ -1,5 +1,6 @@
 export default {
     name: 'ping',
+    category: 'herramientas',
     aliases: ['p'],
     run: async (sock, m, from, text, quoted) => {
         const start = Date.now();

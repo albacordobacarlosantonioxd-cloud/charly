@@ -1,5 +1,6 @@
 export default {
     name: "close",
+    category: 'grupos',
     run: async (sock, m, from, text, quoted, args, isAdmin) => {
         if (!isAdmin) {
             return sock.sendMessage(from, { text: "Solo los administradores pueden cerrar el grupo." }, { quoted: m });

@@ -2,6 +2,7 @@ import { User } from "../../index.js"; // Ajusta la ruta a donde exportas tu mod
 
 export default {
   command: ['divorce', 'divorcio'],
+  category: 'perfil',
   run: async (sock, m, from) => {
     const userId = m.sender;
 

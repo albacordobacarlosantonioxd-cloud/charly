@@ -1,5 +1,6 @@
 export default {
     name: "del",
+    category: 'grupos',
     aliases: ["delete"],
     run: async (sock, m, from, text, quoted, args, isAdmin, isGroup, sender) => {
         // 1. Solo en grupos

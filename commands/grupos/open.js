@@ -1,5 +1,6 @@
 export default {
     name: "open",
+    category: 'grupos',
     run: async (sock, m, from, text, quoted, args, isAdmin) => {
         if (!isAdmin) {
             return sock.sendMessage(from, { text: "Solo los administradores pueden abrir el grupo." }, { quoted: m });

@@ -4,6 +4,7 @@ import { safeReact } from '../../global.js';
 
 export default {
     name: 'audio',
+    category: 'descargas',
     aliases: ['ytaudio'],
     run: async (sock, m, from, text, quoted) => {
         const query = text;

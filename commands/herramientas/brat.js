@@ -3,6 +3,7 @@ import axios from 'axios';
 
 export default {
     name: 'brat',
+    category: 'herramientas',
     run: async (sock, m, from, text, quoted) => {
         if (!text) return sock.sendMessage(from, { text: '¿Qué frase quieres en el sticker, pariente? Ejemplo: *.brat La MT09*' });
 

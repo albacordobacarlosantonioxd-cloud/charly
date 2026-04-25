@@ -2,6 +2,7 @@ import axios from 'axios';
 
 export default {
     name: 'letra',
+    category: 'herramientas',
     aliases: ['lyrics', 'l'],
     run: async (sock, m, from, text, quoted) => {
         if (!text) return await sock.sendMessage(from, { text: '¿De qué canción quieres la letra, pariente? Ejemplo: *.letra El Azul*' }, { quoted: m });

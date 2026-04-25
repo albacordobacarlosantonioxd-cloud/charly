@@ -3,6 +3,7 @@ import { safeReact } from '../../global.js';
 
 export default {
     name: 'tiktok',
+    category: 'descargas',
     aliases: ['tt'],
     run: async (sock, m, from, text, quoted, args) => {
         if (!text) return sock.sendMessage(from, { text: '¿Qué buscamos en TikTok? Ejemplo: .tt pvta luna' });

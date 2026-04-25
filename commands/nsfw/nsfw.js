@@ -56,6 +56,7 @@ const alias = {
 
 export default {
   name: 'nsfw_interact',
+    category: 'nsfw',
   aliases: ['anal','violar','cum','undress','encuerar','fuck','coger','spank','nalgada','lickpussy','fap','paja','grope','sixnine','69','suckboobs','grabboobs','blowjob','mamada','bj','boobjob','yuri','tijeras','footjob','cummoth','cummouth','cumshot','handjob','lickass','lickdick','fingering','creampie','facesitting','deepthroat','thighjob','bondage','pegging','futanari','futa','yaoi','bukkake','orgy','orgia','squirt','squirting'],
   run: async (sock, m, from, text, quoted, args, isAdmin, isGroup) => {
 

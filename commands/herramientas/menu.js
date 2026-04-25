@@ -1,5 +1,6 @@
 export default {
     name: 'menu',
+    category: 'herramientas',
     run: async (sock, m, from, text, quoted) => {
         const imagenMenu = 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png'; 
 

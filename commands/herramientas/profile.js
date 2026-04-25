@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 export default {
     name: 'profile',
+    category: 'herramientas',
     aliases: ['perfil'],
     run: async (sock, m, from, text, quoted, args, isAdmin, isGroup) => {
         const User = mongoose.model('User');

@@ -3,6 +3,7 @@ import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 
 export default {
     name: 'sticker',
+    category: 'herramientas',
     aliases: ['s'],
     run: async (sock, m, from, text, quoted) => {
         try {
