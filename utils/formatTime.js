@@ -17,4 +17,4 @@ const formatRemainingTime = (ms) => {
   return parts.join(" ");
 };
 
-module.exports = formatRemainingTime;
+export default formatRemainingTime;

@@ -1,23 +1,35 @@
-const axios = require('axios');
+import axios from 'axios';
 
-module.exports = {
+export default {
     name: 'kiss',
     aliases: ['hug', 'slap'],
     run: async (sock, m, from, text, quoted, args, isAdmin, isGroup, sender) => {
-        const command = args[0] || m.text.slice(1).split(' ')[0].toLowerCase();
-        let mentioned = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-        let quotedParticipant = m.message?.extendedTextMessage?.contextInfo?.participant;
+        const body = m.message?.conversation || m.message?.extendedTextMessage?.text || m.message?.imageMessage?.caption || "";
+        const command = body.trim().slice(1).split(' ')[0].toLowerCase();
+        
+        const contextInfo = m.message?.extendedTextMessage?.contextInfo;
+        let mentioned = contextInfo?.mentionedJid?.[0];
+        let quotedParticipant = contextInfo?.participant;
+        
+        // Si hay quotedMessage pero no hay participant, intentar obtenerlo del quotedMessage
+        if (!quotedParticipant && quoted && quoted.key) {
+            quotedParticipant = quoted.key.participant || quoted.key.remoteJid;
+        }
+        
         const objetivo = mentioned || quotedParticipant;
 
-        if (!objetivo) {
-            return sock.sendMessage(from, { text: `⚠️ ¡Epa! Etiqueta a alguien o responde a su mensaje para usar .${command}, pariente.` }, { quoted: m });
+        if (!objetivo || typeof objetivo !== 'string') {
+            return sock.sendMessage(from, { 
+                text: `⚠️ ¡Epa! Etiqueta a alguien o responde a su mensaje para usar .${command}, pariente.` 
+            }, { quoted: m });
         }
 
         try {
             const response = await axios.get(`https://api.waifu.pics/sfw/${command}`);
             const gifUrl = response.data.url;
+            
             const targetName = objetivo.split('@')[0];
-            const selfName = sender.split('@')[0];
+            const selfName = sender ? sender.split('@')[0] : 'Yo';
             
             let frase = '';
             if (command === 'kiss') frase = `👩‍❤️‍💋‍👨 @${selfName} le dio un beso a @${targetName}`;
@@ -28,7 +40,7 @@ module.exports = {
                 video: { url: gifUrl }, 
                 caption: frase,
                 gifPlayback: true,
-                mentions: [sender, objetivo]
+                mentions: [sender, objetivo].filter(Boolean)
             }, { quoted: m });
 
         } catch (e) {

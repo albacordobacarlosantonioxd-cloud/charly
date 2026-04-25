@@ -1,5 +1,6 @@
-const axios = require('axios');
-const FormData = require('form-data');
+import axios from 'axios';
+import FormData from 'form-data';
+import { downloadContentFromMessage } from "@whiskeysockets/baileys";
 
 async function uploadAudio(buffer) {
     try {
@@ -23,11 +24,10 @@ async function uploadAudio(buffer) {
     }
 }
 
-module.exports = {
+export default {
     name: 'separate',
     aliases: ['vocal', 'separe'],
     run: async (sock, m, from, text, quoted) => {
-        const { downloadContentFromMessage } = require("@whiskeysockets/baileys");
         const isAudio = m.message.audioMessage || quoted?.audioMessage;
 
         if (!isAudio) return sock.sendMessage(from, { text: '❌ Responde a un audio o nota de voz, pariente.' }, { quoted: m });

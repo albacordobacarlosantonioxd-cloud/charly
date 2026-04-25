@@ -1,14 +1,22 @@
-require("dotenv").config();
-const express = require("express");
+import "dotenv/config";
+import express from "express";
+import cors from "cors";
+import mongoose from "mongoose";
+import pino from "pino";
+import path from "path";
+import { pathToFileURL } from "url";
+import fs from "fs-extra";
+import { Boom } from "@hapi/boom";
+import QRCode from "qrcode";
+import {
+    default as makeWASocket,
+    useMultiFileAuthState,
+    fetchLatestBaileysVersion,
+    DisconnectReason
+} from "@whiskeysockets/baileys";
+
 const app = express();
-const cors = require("cors");
 const PORT = process.env.PORT || 3000;
-const mongoose = require("mongoose");
-const pino = require("pino");
-const path = require("path");
-const fs = require("fs-extra");
-const { Boom } = require("@hapi/boom");
-const qrcode = require("qrcode-terminal");
 
 // --- MODELOS Y BASE DE DATOS ---
 const mongoURI = process.env.MONGODB_URI;
@@ -71,39 +79,39 @@ app.listen(PORT, () => console.log(`🚀 API en puerto ${PORT}`));
 
 // --- CARGADOR DE COMANDOS ---
 const commands = new Map();
-const loadCommands = (dir = "./commands") => {
+const loadCommands = async (dir = "./commands") => {
     if (!fs.existsSync(dir)) return;
     const files = fs.readdirSync(dir);
     for (const file of files) {
         const filePath = path.join(dir, file);
         if (fs.statSync(filePath).isDirectory()) {
-            loadCommands(filePath);
+            console.log(`📂 Entrando a carpeta: ${filePath}`);
+            await loadCommands(filePath);
         } else if (file.endsWith(".js")) {
+            console.log(`⏳ Cargando: ${filePath} ...`);
             try {
-                delete require.cache[require.resolve(path.resolve(filePath))];
-                const command = require(path.resolve(filePath));
-                if (command.name) {
-                    commands.set(command.name, command);
+                const module = await import(pathToFileURL(path.resolve(filePath)).href);
+                const command = module.default || module;
+                const name = command.name || (Array.isArray(command.command) ? command.command[0] : command.command);
+                if (name) {
+                    commands.set(name, command);
                     if (command.aliases) {
                         command.aliases.forEach(alias => commands.set(alias, command));
                     }
+                    if (Array.isArray(command.command)) {
+                        command.command.forEach(cmd => commands.set(cmd, command));
+                    }
+                    console.log(`✅ Cargado: ${name}`);
+                } else {
+                    console.warn(`⚠️ Sin nombre: ${filePath}`);
                 }
             } catch (e) {
-                console.error(`Error cargando comando en ${filePath}:`, e);
+                console.error(`❌ Error cargando comando en ${filePath}:`, e.message || e);
             }
         }
     }
 };
-loadCommands();
-
 // --- WHATSAPP CONNECTION ---
-const {
-    default: makeWASocket,
-    useMultiFileAuthState,
-    fetchLatestBaileysVersion,
-    DisconnectReason
-} = require("@whiskeysockets/baileys");
-
 let sock;
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
@@ -118,9 +126,17 @@ async function startBot() {
     });
 
     sock.ev.on("creds.update", saveCreds);
-    sock.ev.on("connection.update", (update) => {
+    sock.ev.on("connection.update", async (update) => {
         const { connection, lastDisconnect, qr } = update;
-        if (qr) qrcode.generate(qr, { small: true });
+        if (qr) {
+            console.log("📱 Escanea el QR con tu WhatsApp:");
+            try {
+                await QRCode.toFile("qr-code.png", qr, { scale: 8 });
+                console.log("✅ Imagen QR guardada como: qr-code.png (ábrela y escanéala)");
+            } catch (err) {
+                console.error("❌ Error al guardar el QR:", err.message);
+            }
+        }
         if (connection === "close") {
             const shouldReconnect = (lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
             if (shouldReconnect) startBot();
@@ -136,6 +152,7 @@ async function startBot() {
         const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "";
         const from = m.key.remoteJid;
         const sender = m.key.fromMe ? (sock.user.id.split(":")[0] + "@s.whatsapp.net") : (m.key.participant || from);
+        m.sender = sender;
         const isGroup = from.endsWith("@g.us");
 
         // MIDDLEWARE para antilink
@@ -155,23 +172,43 @@ async function startBot() {
         const cmd = commands.get(commandName);
         if (!cmd) return;
 
+        // --- NORMALIZAR SENDER (quitar :XX del final) ---
+        const normalizedSender = sender.split(':')[0] + '@s.whatsapp.net';
+
         // --- CHEQUEO ADMINS ---
         let isAdmin = false;
         if (isGroup) {
             try {
                 const groupMetadata = await sock.groupMetadata(from);
-                isAdmin = groupMetadata.participants.find(p => p.id === sender)?.admin !== null;
+                const participant = groupMetadata.participants.find(p => {
+                    const normalizedP = p.id.split(':')[0] + '@s.whatsapp.net';
+                    return normalizedP === normalizedSender;
+                });
+                isAdmin = participant ? (participant.admin !== null && participant.admin !== undefined) : false;
             } catch (e) {
                 isAdmin = false;
             }
         }
 
         try {
-            await cmd.run(sock, m, from, text, m.message.extendedTextMessage?.contextInfo?.quotedMessage, args, isAdmin, isGroup);
+            await cmd.run(sock, m, from, text, m.message.extendedTextMessage?.contextInfo?.quotedMessage, args, isAdmin, isGroup, normalizedSender);
         } catch (e) {
             console.error(`Error en comando ${commandName}:`, e);
         }
     });
 }
 
-startBot();
+// Base de datos en RAM para compatibilidad con comandos legacy
+const db = { users: {}, chats: {}, settings: {} };
+
+export { User, Group, Pack, app, commands, sock, db };
+
+// Retrasamos la carga de comandos para evitar dependencias circulares (los comandos importan index.js)
+setImmediate(async () => {
+    console.log("🔄 Iniciando carga de comandos...");
+    await loadCommands();
+    console.log(`📂 ${commands.size} comandos cargados correctamente`);
+    if (process.env.TEST_MODE !== 'true') {
+        startBot();
+    }
+});

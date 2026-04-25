@@ -1,6 +1,6 @@
-const axios = require("axios");
+import axios from "axios";
 
-module.exports = {
+export default {
     name: "flux",
     run: async (sock, m, from, text, quoted, args) => {
         if (!text) return sock.sendMessage(from, { text: '¿Qué quieres que cree la IA? Ejemplo: .ia un astronauta en Marte' });

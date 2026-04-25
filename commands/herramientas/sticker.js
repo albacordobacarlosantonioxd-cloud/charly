@@ -1,7 +1,7 @@
-const { Sticker, StickerTypes } = require('wa-sticker-formatter');
-const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+import { Sticker, StickerTypes } from 'wa-sticker-formatter';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 
-module.exports = {
+export default {
     name: 'sticker',
     aliases: ['s'],
     run: async (sock, m, from, text, quoted) => {

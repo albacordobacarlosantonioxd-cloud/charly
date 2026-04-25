@@ -1,8 +1,9 @@
-module.exports = {
+import mongoose from 'mongoose';
+
+export default {
     name: 'profile',
     aliases: ['perfil'],
     run: async (sock, m, from, text, quoted, args, isAdmin, isGroup) => {
-        const mongoose = require('mongoose');
         const User = mongoose.model('User');
         const sender = m.key.fromMe ? (sock.user.id.split(':')[0] + '@s.whatsapp.net') : (m.key.participant || from);
 

@@ -1,17 +1,18 @@
-module.exports = {
+import axios from 'axios';
+import yts from 'yt-search';
+import { safeReact } from '../../global.js';
+
+export default {
     name: 'audio',
     aliases: ['ytaudio'],
     run: async (sock, m, from, text, quoted) => {
-        const axios = require('axios');
-        const yts = require('yt-search');
-
         const query = text;
         if (!query) return sock.sendMessage(from, { text: '⚠️ ¡Epa! Escribe el nombre o pega el link, pariente.' }, { quoted: m });
 
         try {
             let videoData = null;
 
-            await sock.sendMessage(from, { react: { text: "⏳", key: m.key } });
+            await safeReact(sock, from, "⏳", m.key);
 
             if (query.match(/(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/)) {
                 const videoId = yts.parseVideoId(query);
@@ -19,7 +20,7 @@ module.exports = {
             } else {
                 const search = await yts(query);
                 if (!search || !search.videos.length) {
-                    await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
+                    await safeReact(sock, from, "❌", m.key);
                     return sock.sendMessage(from, { text: '❌ No encontré esa rola.' });
                 }
                 videoData = search.videos[0];
@@ -31,11 +32,11 @@ module.exports = {
             const canal = videoData.author?.name || 'Desconocido';
 
             const infoMessage = `➩ Descargando Audio › *${videoTitle}*\n\n` +
-                              `> ❖ Canal › *${canal}*\n` +
-                              `> ⴵ Duración › *${videoData.timestamp || '??:??'}*\n` +
-                              `> ❀ Vistas › *${vistas}*\n` +
-                              `> ✩ Publicado › *${videoData.ago || 'Reciente'}*\n` +
-                              `> ❒ Enlace › *${videoUrl}*`;
+                                `> ❖ Canal › *${canal}*\n` +
+                                `> ⴵ Duración › *${videoData.timestamp || '??::??'}*\n` +
+                                `> ❀ Vistas › *${vistas}*\n` +
+                                `> ✩ Publicado › *${videoData.ago || 'Reciente'}*\n` +
+                                `> ❒ Enlace › *${videoUrl}*`;
 
             await sock.sendMessage(from, { 
                 image: { url: videoData.image || videoData.thumbnail }, 
@@ -56,14 +57,14 @@ module.exports = {
                     ptt: false 
                 }, { quoted: m });
 
-                await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
+                await safeReact(sock, from, "✅", m.key);
             } else {
-                await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
+                await safeReact(sock, from, "❌", m.key);
                 return sock.sendMessage(from, { text: '❌ La API v2 no soltó el archivo. Intenta con otra rola.' });
             }
         } catch (e) {
             console.error("ERROR EN YTAUDIO:", e.message);
-            await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
+            await safeReact(sock, from, "❌", m.key);
             await sock.sendMessage(from, { text: `❌ Valio queso, pariente. Error: ${e.message}` });
         }
     }

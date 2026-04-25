@@ -1,6 +1,6 @@
-const axios = require("axios");
+import axios from "axios";
 
-module.exports = {
+export default {
     name: "copilot",
     aliases: ["cop"],
     run: async (sock, m, from, text, quoted, args) => {

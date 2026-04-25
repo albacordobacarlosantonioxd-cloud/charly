@@ -1,15 +1,17 @@
-module.exports = {
+import yts from 'yt-search';
+import axios from 'axios';
+import { safeReact } from '../../global.js';
+
+export default {
     name: 'video',
     aliases: ['ytvideo'],
     run: async (sock, m, from, text, quoted) => {
-        const yts = require('yt-search');
-        const axios = require('axios');
         if (!text) return sock.sendMessage(from, { text: '¿Qué video buscamos, pariente? Pasa el nombre o link.' });
         
         try {
             let videoData = null;
 
-            await sock.sendMessage(from, { react: { text: "⏳", key: m.key } });
+            await safeReact(sock, from, "⏳", m.key);
 
             if (text.match(/(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/)) {
                 const videoId = yts.parseVideoId(text);
@@ -17,12 +19,15 @@ module.exports = {
             } else {
                 const search = await yts(text);
                 if (!search || !search.videos.length) {
+                    await safeReact(sock, from, "❌", m.key);
                     return sock.sendMessage(from, { text: '❌ No hallé el video.' });
                 }
                 videoData = search.videos[0];
             }
 
+            // Límite de 1h 20min
             if (videoData.seconds > 4800) {
+                await safeReact(sock, from, "⚠️", m.key);
                 return sock.sendMessage(from, { text: `⚠️ Muy largo. El límite es 1h 20min.` });
             }
 
@@ -47,7 +52,7 @@ module.exports = {
                         fileName: `${videoData.title}.mp4`
                     }, { quoted: m });
 
-                    await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
+                    await safeReact(sock, from, "✅", m.key);
 
                 } else {
                     let rawRes = JSON.stringify(res.data).substring(0, 500);

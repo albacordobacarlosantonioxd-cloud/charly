@@ -1,4 +1,4 @@
-module.exports = {
+export default {
     name: "promote",
     run: async (sock, m, from, text, quoted, args, isAdmin, isGroup) => {
         if (!isGroup) {
@@ -9,6 +9,7 @@ module.exports = {
         }
 
         let user = m.message.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || m.message.extendedTextMessage?.contextInfo?.participant;
+        
         if (!user && text) {
             user = text.replace(/\D/g, "") + "@s.whatsapp.net";
         }
@@ -19,10 +20,17 @@ module.exports = {
 
         try {
             await sock.groupParticipantsUpdate(from, [user], "promote");
-            await sock.sendMessage(from, { text: `✅ @${user.split("@")[0]} ha sido promovido a administrador.`, mentions: [user] }, { quoted: m });
+
+            await sock.sendMessage(from, { 
+                text: `✅ @${user.split("@")[0]} ha sido promovido a administrador.`, 
+                mentions: [user] 
+            }, { quoted: m });
+            
         } catch (e) {
             console.error("Error al promover participante:", e);
-            await sock.sendMessage(from, { text: "❌ Hubo un error al intentar promover. Asegúrate de que el bot sea administrador." }, { quoted: m });
+            await sock.sendMessage(from, { 
+                text: "❌ Hubo un error al intentar promover. Asegúrate de que el bot sea administrador." 
+            }, { quoted: m });
         }
     }
 };

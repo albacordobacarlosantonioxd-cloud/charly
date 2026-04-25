@@ -1,4 +1,4 @@
-const User = require("../index").User;
+import { User, db } from "../index.js";
 
 const saveDB = async (jid) => {
   try {
@@ -21,4 +21,4 @@ const saveDB = async (jid) => {
   }
 };
 
-module.exports = saveDB;
+export default saveDB;

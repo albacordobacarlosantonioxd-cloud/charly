@@ -1,21 +1,19 @@
-const { Sticker, StickerTypes } = require('wa-sticker-formatter');
-const axios = require('axios');
+import { Sticker, StickerTypes } from 'wa-sticker-formatter';
+import axios from 'axios';
 
-module.exports = {
+export default {
     name: 'brat',
     run: async (sock, m, from, text, quoted) => {
         if (!text) return sock.sendMessage(from, { text: '¿Qué frase quieres en el sticker, pariente? Ejemplo: *.brat La MT09*' });
 
         try {
-            await sock.sendMessage(from, { react: { text: "🎨", key: m.key } });
-
-            const apiKey = 'sylphy-ty5xtWm';
+            const apiKey = process.env.SYLPHY_KEY;
             const urlBrat = `https://sylphyy.xyz/tools/brat?text=${encodeURIComponent(text)}&api_key=${apiKey}`;
 
             const response = await axios.get(urlBrat, { responseType: 'arraybuffer' });
             
             if (response.headers['content-type'].includes('application/json')) {
-                return sock.sendMessage(from, { text: '❌ La API mandó un error. Revisa tu API Key.' });
+                return sock.sendMessage(from, { text: '❌ La API mandó un error. Revisa tu API Key en el .env.' });
             }
 
             const buffer = Buffer.from(response.data);
@@ -28,12 +26,10 @@ module.exports = {
 
             const stickerBuffer = await sticker.toBuffer();
             await sock.sendMessage(from, { sticker: stickerBuffer }, { quoted: m });
-            await sock.sendMessage(from, { react: { text: "✅", key: m.key } });
 
         } catch (e) {
             console.error("ERROR BRAT:", e.message);
-            await sock.sendMessage(from, { react: { text: "❌", key: m.key } });
-            await sock.sendMessage(from, { text: '❌ Valio queso. Intenta con un texto más corto o revisa tu conexión.' });
+            await sock.sendMessage(from, { text: '❌ Valio queso. Intenta de nuevo.' });
         }
     }
 };

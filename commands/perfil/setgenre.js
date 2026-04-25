@@ -1,7 +1,10 @@
-module.exports = {
+import { User } from "../../index.js";
+
+export default {
   name: 'setgenre',
   aliases: ['setgenero'],
   run: async (sock, m, from, text, quoted, args, isAdmin, isGroup) => {
+    const sender = m.sender;
     // 1. Verificamos que el usuario elija una opción
     if (!text) return await sock.sendMessage(from, { 
         text: `《✧》 Elige tu género.\n\n*Opciones:* .setgenre Hombre | Mujer | Binario` 
@@ -18,9 +21,9 @@ module.exports = {
             { upsert: true }
         );
 
-        // 3. Actualizamos la memoria RAM (db.users)
-        if (!db.users[sender]) db.users[sender] = {};
-        db.users[sender].gender = generoValido;
+        // 3. Actualizamos la memoria RAM (db.users) - solo si es necesario y db está definido y se usa.
+        // if (!db.users[sender]) db.users[sender] = {};
+        // db.users[sender].gender = generoValido;
 
         // 4. Mensaje de confirmación
         await sock.sendMessage(from, { 

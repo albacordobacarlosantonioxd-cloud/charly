@@ -1,4 +1,4 @@
-module.exports = {
+export default {
     name: 'ping',
     aliases: ['p'],
     run: async (sock, m, from, text, quoted) => {

@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema({
   jid: { type: String, required: true, unique: true },
@@ -12,4 +12,4 @@ const userSchema = new mongoose.Schema({
 
 // Aseguramos que el modelo User exista
 const User = mongoose.models.User || mongoose.model('User', userSchema);
-module.exports = User;
+export default User;

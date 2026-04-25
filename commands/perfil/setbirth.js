@@ -1,7 +1,10 @@
-module.exports = {
+import { User } from "../../index.js";
+
+export default {
   name: 'setbirth',
   aliases: ['setcumple'],
   run: async (sock, m, from, text, quoted, args, isAdmin, isGroup) => {
+    const sender = m.sender;
     if (!text) return await sock.sendMessage(from, { 
         text: `《✧》 Escribe tu fecha de nacimiento.\n\n✐ *Ejemplo:* .setbirth 15 de Octubre` 
     }, { quoted: m });
@@ -14,9 +17,8 @@ module.exports = {
             { upsert: true }
         );
 
-        // 2. Opcional: Actualizamos la memoria local por si acaso
-        if (!db.users[sender]) db.users[sender] = {};
-        db.users[sender].birth = text;
+        // No es necesario actualizar db.users[sender] si solo usas el modelo de Mongoose
+        // Si db es una representación en memoria, entonces sí, pero si no se usa, es redundante.
 
         await sock.sendMessage(from, { 
             text: `🎂 ¡Listo! Tu fecha de nacimiento se ha guardado como: *${text}*\n\n> Ahora aparecerá en tu .perfil para siempre.` 

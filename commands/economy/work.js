@@ -1,46 +1,68 @@
-module.exports = {
+// 1. Importaciones necesarias (ES Modules requiere extensión .js)
+import formatTime from '../../utils/formatTime.js';
+import trabajosLista from '../../data/trabajosLista.js';
+import { pickRandom } from '../utils/myFunctions.js';
+
+// Importamos db desde el index principal
+import { db } from '../../index.js'; 
+
+export default {
   name: 'work',
   aliases: ['w', 'chambear', 'chamba', 'trabajar'],
+  category: 'rpg',
   run: async (sock, m, from, text, quoted, args, isAdmin, isGroup) => {
-    const formatTime = require('../utils/formatTime');
-    const trabajosLista = require('../data/trabajosLista');
-    // 1. Aseguramos que el usuario exista en la memoria local
-    if (!db.users[sender]) db.users[sender] = { id: sender, money: 0, lastwork: 0 };
-    const user = db.users[sender];
     
+    // 2. Usar m.sender para que el dinero se guarde al usuario
+    const senderId = m.sender; 
+
+    // Aseguramos que el usuario exista en la RAM (global.db)
+    if (!db.users[senderId]) {
+        db.users[senderId] = { 
+            jid: senderId, 
+            money: 0, 
+            lastwork: 0, 
+            name: m.pushName || 'Usuario' 
+        };
+    }
+    
+    const user = db.users[senderId];
     const cooldown = 3 * 60 * 1000; // 3 minutos de espera
     const now = Date.now();
     
-    // 2. Revisar si el usuario está en tiempo de espera (Cooldown)
+    // 3. Revisar Cooldown
     if (user.lastwork && now < user.lastwork) {
         const tiempoRestanteMs = user.lastwork - now;
-        const tiempoRestante = formatTime(tiempoRestanteMs); // Asegúrate de tener tu función formatTime
+        const tiempoRestante = formatTime(tiempoRestanteMs);
         
         return await sock.sendMessage(from, { 
-            text: `⚠️ *¡Tranquilo, pariente!* \n\nDebes esperar *${tiempoRestante}* para volver a la chamba.` 
+            text: `⚠️ *¡Tranquilo, pariente!* \n\nYa chambeaste mucho. Debes esperar *${tiempoRestante}* para volver a la labor.` 
         }, { quoted: m });
     }
 
-    // 3. Definir la ganancia aleatoria (entre $2000 y $4000)
-    const rsl = Math.floor(Math.random() * (4000 - 2000 + 1)) + 2000;
+    // 4. Calcular ganancia (entre $2000 y $4000)
+    const ganancia = Math.floor(Math.random() * (4000 - 2000 + 1)) + 2000;
     
-    // 4. Actualizar datos en el objeto local
-    user.money = (user.money || 0) + rsl;
+    // 5. Actualizar la RAM
+    user.money = (user.money || 0) + ganancia;
     user.lastwork = now + cooldown;
     
-    // 5. ¡LO MÁS IMPORTANTE! Guardar en la nube de MongoDB
+    // 6. Guardar en MongoDB directamente
     try {
-        await saveDB(sender); 
+        const { User } = await import('../../index.js');
+        await User.updateOne(
+            { jid: senderId },
+            { $inc: { money: ganancia }, $set: { lastwork: user.lastwork } },
+            { upsert: true }
+        );
     } catch (e) {
-        console.error("Error al guardar la chamba en Mongo:", e);
+        console.error("Error al guardar en MongoDB:", e);
     }
 
-    // 6. Elegir un trabajo aleatorio de la lista
-    // Asegúrate de tener definida 'trabajosLista' arriba de tus cases
+    // 7. Elegir trabajo y enviar mensaje
     const mensajeTrabajo = pickRandom(trabajosLista);
 
     await sock.sendMessage(from, { 
-        text: `👷 *${mensajeTrabajo}*\n💰 Ganaste: *+$${rsl.toLocaleString()}* pesos.\n\n> _Tus ahorros están seguros en la nube._` 
+        text: `👷 *${mensajeTrabajo}*\n\n💰 Ganaste: *+$${ganancia.toLocaleString()}* pesos.\n\n> _Tu dinero ha sido enviado a tu cuenta._` 
     }, { quoted: m });
   }
 };
