@@ -13,3 +13,9 @@ Thumbs.db
 
 # --- IMPORTANTE: NO AGREGUES AQUÍ 'auth_info_baileys' ---
 # Queremos que la sesión SÍ se suba a GitHub para que Railway la reconozca.
+.aider*
+.env
+.env
+.env
+.env
+.env

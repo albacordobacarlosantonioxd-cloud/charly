@@ -43,19 +43,34 @@ export default {
                     { timeout: 30000 }
                 );
 
-                if (res.data && res.data.status && res.data.result?.dl_url) {
-                    const dl_url = res.data.result.dl_url;
+               if (res.data && res.data.status && res.data.result?.dl_url) {
+    const dl_url = res.data.result.dl_url;
 
-                    await sock.sendMessage(from, { 
-                        video: { url: dl_url }, 
-                        caption: `✅ *${videoData.title}*`,
-                        mimetype: 'video/mp4',
-                        fileName: `${videoData.title}.mp4`
-                    }, { quoted: m });
+    // 1. Descargamos el video a un Buffer para evitar el error de streaming
+    const response = await axios({
+        method: 'get',
+        url: dl_url,
+        responseType: 'arraybuffer', // Crucial para archivos multimedia
+        timeout: 60000, // Le damos 1 minuto por si el video es pesado
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        }
+    });
 
-                    await safeReact(sock, from, "✅", m.key);
+    const buffer = Buffer.from(response.data);
 
-                } else {
+    // 2. Enviamos el Buffer directamente
+    await sock.sendMessage(from, { 
+        video: buffer, 
+        caption: `✅ *${videoData.title}*`,
+        mimetype: 'video/mp4',
+        fileName: `${videoData.title}.mp4`
+    }, { quoted: m });
+
+    await safeReact(sock, from, "✅", m.key);
+
+}
+                else {
                     let rawRes = JSON.stringify(res.data).substring(0, 500);
                     return sock.sendMessage(from, { text: `❌ _Error del Servidor:_ No devolvió link de descarga.\n\n*Respuesta:* ${rawRes}` });
                 }

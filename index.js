@@ -116,7 +116,7 @@ async function startBot() {
         version,
         logger: pino({ level: "silent" }),
         auth: state,
-        printQRInTerminal: true,
+        printQRInTerminal: false,
         browser: ["Charly-Bot", "Chrome", "1.0.0"]
     });
 
@@ -141,14 +141,32 @@ async function startBot() {
     });
 
     sock.ev.on("messages.upsert", async ({ messages }) => {
-        const m = messages[0];
-        if (!m.message) return;
+    const m = messages[0];
+    if (!m.message) return;
 
-        const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "";
-        const from = m.key.remoteJid;
-        const sender = m.key.fromMe ? (sock.user.id.split(":")[0] + "@s.whatsapp.net") : (m.key.participant || from);
-        m.sender = sender;
-        const isGroup = from.endsWith("@g.us");
+    const from = m.key.remoteJid;
+    const isGroup = from.endsWith("@g.us");
+    
+    // --- MEJORA AQUÍ ---
+    // Extraemos la info del mensaje citado (si existe)
+    const contextInfo = m.message.extendedTextMessage?.contextInfo;
+    if (contextInfo?.quotedMessage) {
+        m.quoted = {
+            sender: contextInfo.participant?.split(':')[0] + '@s.whatsapp.net',
+            message: contextInfo.quotedMessage,
+            key: {
+                remoteJid: from,
+                fromMe: contextInfo.participant === sock.user.id.split(':')[0] + '@s.whatsapp.net',
+                id: contextInfo.stanzaId,
+                participant: contextInfo.participant
+            }
+        };
+    }
+    // -------------------
+
+    const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "";
+    const sender = m.key.fromMe ? (sock.user.id.split(":")[0] + "@s.whatsapp.net") : (m.key.participant || from);
+    m.sender = sender;
 
         // MIDDLEWARE para antilink
         const antilinkCommand = commands.get("antilink");

@@ -2,7 +2,7 @@ import axios from 'axios';
 
 export default {
     name: "gemini",
-    aliases: ["gemi", "chatgpt", "google"], // Para que responda a varios nombres
+    aliases: ["gemi", "google"], // Para que responda a varios nombres
     category: "ia",
     run: async (sock, m, from, text, quoted) => {
         
