@@ -1,70 +1,61 @@
 import axios from "axios";
 import FormData from "form-data";
+import { downloadContentFromMessage } from "@whiskeysockets/baileys";
 
 export default {
     name: "removebg",
     category: 'tools',
     aliases: ["rbg", "quitarfondo"],
     run: async (sock, m, from, text, quoted, args) => {
-        // Mejoramos la detección del objeto de mensaje
-        const q = m.quoted ? m.quoted : m;
-        
-        // Intentamos obtener el mimetype de varias fuentes posibles en el objeto
-        const mime = (q.msg || q).mimetype || q.mediaType || '';
+        // Usamos la misma lógica de detección que te funcionó en nanobanana
+        const q = m.quoted ? m.quoted.message : m.message;
+        const imageMsg = q.imageMessage || q.viewOnceMessage?.message?.imageMessage || q.viewOnceMessageV2?.message?.imageMessage;
 
-        console.log("DEBUG RBG: Mimetype detectado ->", mime);
-
-        // Si no detecta imagen, forzamos un log para ver qué objeto está recibiendo
-        if (!/image/.test(mime)) {
-            console.log("DEBUG RBG: No se detectó imagen. Objeto recibido:", JSON.stringify(q, null, 2));
-            return;
-        }
+        if (!imageMsg) return; // Salida silenciosa si no hay imagen
 
         try {
-            console.log("DEBUG RBG: Descargando media...");
-            // Usamos una descarga más robusta
-            const media = await q.download?.() || await sock.downloadMediaMessage(q);
-            
-            if (!media) {
-                console.log("DEBUG RBG: Error al descargar el archivo (Buffer vacío)");
-                return;
-            }
-
-            console.log("DEBUG RBG: Media descargada. Tamaño:", media.length);
-
             const key = "sasuke";
 
-            // 1. Subir para obtener URL
-            const form = new FormData();
-            form.append('file', media, { filename: 'image.png', contentType: mime });
-
-            const uploadRes = await axios.post(`https://api.evogb.org/tools/upload?key=${key}`, form, {
-                headers: { ...form.getHeaders() }
-            });
-
-            console.log("DEBUG RBG: Respuesta uploader:", uploadRes.data);
-
-            const imgUrl = uploadRes.data.url || uploadRes.data.result || uploadRes.data.data?.url;
-            
-            if (!imgUrl) {
-                console.log("DEBUG RBG: No se encontró URL en la respuesta");
-                return;
+            // 1. Descargar imagen de WhatsApp (Copiado de tu código funcional)
+            console.log("--- STEP 1: Descargando imagen para RemoveBG ---");
+            const stream = await downloadContentFromMessage(imageMsg, 'image');
+            let buffer = Buffer.from([]);
+            for await (const chunk of stream) {
+                buffer = Buffer.concat([buffer, chunk]);
             }
 
-            // 2. Procesar Remove Background
-            const urlFinal = `https://api.evogb.org/tools/removebg?url=${encodeURIComponent(imgUrl)}&key=${key}`;
-            const response = await axios.get(urlFinal, { responseType: 'arraybuffer' });
+            // 2. Subir a Uploader
+            console.log("--- STEP 2: Subiendo a Uploader ---");
+            const form = new FormData();
+            form.append('file', buffer, { filename: 'image.jpg' });
+            
+            const uploadRes = await axios.post('https://api.evogb.org/tools/upload', form, {
+                headers: { ...form.getHeaders() }
+            });
+            
+            const directUrl = uploadRes.data.result || uploadRes.data.url;
+            console.log("🔗 Enlace generado para RBG:", directUrl);
 
-            // 3. Enviar
+            if (!directUrl) return;
+
+            // 3. Petición a Remove Background
+            console.log("--- STEP 3: Quitando fondo ---");
+            const urlFinal = `https://api.evogb.org/tools/removebg?url=${encodeURIComponent(directUrl)}&key=${key}`;
+            
+            const response = await axios.get(urlFinal, { 
+                responseType: 'arraybuffer',
+                timeout: 60000 // 60 segundos por si la imagen es pesada
+            });
+
+            // 4. Enviar resultado (Sin texto ni emojis como pediste)
+            console.log("--- STEP 4: Enviando resultado a WA ---");
             await sock.sendMessage(from, { 
                 image: Buffer.from(response.data)
             }, { quoted: m });
 
-            console.log("DEBUG RBG: ¡Éxito total!");
-
         } catch (e) {
-            console.error("--- ERROR EN EJECUCIÓN ---");
-            console.error(e.stack); // Usamos stack para ver exactamente en qué línea falló
+            console.error("--- ERROR EN REMOVEBG ---");
+            console.error(e.message);
         }
     }
 };
