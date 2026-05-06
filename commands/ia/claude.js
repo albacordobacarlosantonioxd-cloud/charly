@@ -19,36 +19,35 @@ export default {
                     'Referer': 'https://api.evogb.org/',
                     'Connection': 'keep-alive'
                 },
-                timeout: 15000 // 15 segundos de espera
+                timeout: 20000 // Aumentado a 20s por estabilidad
             });
             
             console.log("Respuesta completa de la API:", response.data);
 
-            const respuestaIA = response.data.result || response.data.response || response.data.data;
+            // Ajustado para extraer específicamente el 'result' que vimos en tu log
+            const respuestaIA = response.data.result;
 
             if (!respuestaIA) {
-                return sock.sendMessage(from, { text: "La API respondió pero el mensaje vino vacío." });
+                return sock.sendMessage(from, { text: "La API respondió pero no se encontró el resultado." });
             }
 
+            // Enviamos el mensaje asegurándonos de que sea un String
             await sock.sendMessage(from, { 
-                text: respuestaIA.trim() 
+                text: String(respuestaIA).trim() 
             }, { quoted: m });
 
-        } catch (e) {
-            if (e.response) {
-                console.error("--- ERROR DE RESPUESTA ---");
-                console.error("Status:", e.response.status);
-                
-                // Si es un 403, es probable que Cloudflare nos haya detectado
-                if (e.response.status === 403) {
-                    return sock.sendMessage(from, { text: "Error 403: Cloudflare bloqueó la petición desde el servidor. Intenta de nuevo en unos minutos." });
-                }
-            } else if (e.request) {
-                console.error("--- ERROR DE CONEXIÓN (No hubo respuesta) ---");
-            } else {
-                console.error("--- ERROR GENERAL ---", e.message);
-            }
+            console.log("✅ Mensaje enviado con éxito.");
 
+        } catch (e) {
+            console.error("--- DETALLE DEL ERROR ---");
+            if (e.response) {
+                console.error("Status:", e.response.status);
+                if (e.response.status === 403) {
+                    return sock.sendMessage(from, { text: "Error 403: Bloqueo de Cloudflare. Intenta de nuevo más tarde." });
+                }
+            } else {
+                console.error("Mensaje:", e.message);
+            }
             await sock.sendMessage(from, { text: `Error: ${e.message}` });
         }
     }
