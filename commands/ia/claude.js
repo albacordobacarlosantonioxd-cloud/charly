@@ -11,9 +11,17 @@ export default {
             const key = "sasuke"; 
             const urlFinal = `https://api.evogb.org/ai/claude?text=${encodeURIComponent(text)}&key=${key}`;
 
-            const response = await axios.get(urlFinal);
+            const response = await axios.get(urlFinal, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Accept': 'application/json',
+                    'Accept-Language': 'es-MX,es;q=0.9',
+                    'Referer': 'https://api.evogb.org/',
+                    'Connection': 'keep-alive'
+                },
+                timeout: 15000 // 15 segundos de espera
+            });
             
-            // Log para ver qué llega exactamente de la API
             console.log("Respuesta completa de la API:", response.data);
 
             const respuestaIA = response.data.result || response.data.response || response.data.data;
@@ -27,17 +35,17 @@ export default {
             }, { quoted: m });
 
         } catch (e) {
-            // Log ultra detallado para Railway
             if (e.response) {
-                // El servidor respondió con un código fuera del rango 2xx
                 console.error("--- ERROR DE RESPUESTA ---");
                 console.error("Status:", e.response.status);
-                console.error("Data:", e.response.data);
+                
+                // Si es un 403, es probable que Cloudflare nos haya detectado
+                if (e.response.status === 403) {
+                    return sock.sendMessage(from, { text: "Error 403: Cloudflare bloqueó la petición desde el servidor. Intenta de nuevo en unos minutos." });
+                }
             } else if (e.request) {
-                // La petición se hizo pero no hubo respuesta
                 console.error("--- ERROR DE CONEXIÓN (No hubo respuesta) ---");
             } else {
-                // Algo pasó al configurar la petición
                 console.error("--- ERROR GENERAL ---", e.message);
             }
 
