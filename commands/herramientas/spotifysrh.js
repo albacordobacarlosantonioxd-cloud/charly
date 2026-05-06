@@ -11,35 +11,37 @@ export default {
             const key = "sasuke"; 
             const urlFinal = `https://api.evogb.org/search/spotify?query=${encodeURIComponent(text)}&key=${key}`;
 
-            const response = await axios.get(urlFinal);
-            
-            // Accedemos directamente a response.data.result basado en tu JSON
-            const results = response.data.result;
+            console.log("--- DEBUG SP SEARCH ---");
+            console.log("Buscando:", text);
 
-            if (!results || results.length === 0) {
-                return sock.sendMessage(from, { text: "No encontré resultados, pariente." });
+            const response = await axios.get(urlFinal);
+            const res = response.data;
+
+            if (res.status && res.result && res.result.length > 0) {
+                const results = res.result;
+
+                // Construimos la lista de resultados en texto plano
+                let txt = `🎵 *Resultados para:* _${text}_\n\n`;
+                
+                results.slice(0, 5).forEach((track, i) => {
+                    txt += `*${i + 1}.* ${track.title}\n`;
+                    txt += `👤 *Artista:* ${track.artist}\n`;
+                    txt += `🔗 *Link:* ${track.link}\n\n`;
+                });
+
+                txt += `_Copia el link y usa el comando .spotify para descargarla._`;
+
+                // Enviamos SOLO el texto para evitar el crash de GLib/Segfault
+                await sock.sendMessage(from, { text: txt }, { quoted: m });
+
+            } else {
+                await sock.sendMessage(from, { text: "No encontré resultados, pariente." });
             }
 
-            // Construimos la lista de resultados
-            let txt = `🎵 *Resultados para:* _${text}_\n\n`;
-            
-            results.slice(0, 5).forEach((track, i) => {
-                txt += `*${i + 1}.* ${track.title}\n`;
-                txt += `👤 *Artista:* ${track.artist}\n`;
-                txt += `🔗 *Link:* ${track.link}\n\n`;
-            });
-
-            txt += `_Copia el link y usa el comando .spotify para descargarla._`;
-
-            // Enviamos la imagen del primer resultado con la lista
-            await sock.sendMessage(from, { 
-                image: { url: results[0].image }, 
-                caption: txt 
-            }, { quoted: m });
-
         } catch (e) {
-            console.error("ERROR SP SEARCH:", e.message);
-            await sock.sendMessage(from, { text: "El servidor de búsqueda está saturado. Intenta de nuevo." });
+            console.error("--- ERROR SPOTIFY SEARCH ---");
+            console.error("Mensaje:", e.message);
+            await sock.sendMessage(from, { text: `Error en la búsqueda: ${e.message}` });
         }
     }
 };

@@ -8,10 +8,17 @@ export default {
             const key = "sasuke"; 
             const urlFinal = `https://api.evogb.org/tools/tempmail?key=${key}`;
 
-            const response = await axios.get(urlFinal);
+            console.log("--- DEBUG TEMPMAIL ---");
+            console.log("Solicitando correo temporal...");
+
+            const response = await axios.get(urlFinal, { timeout: 10000 });
+            
+            // Log para ver qué llega exactamente de la API en el servidor
+            console.log("Respuesta completa Tempmail:", JSON.stringify(response.data));
+
             const res = response.data;
 
-            // Ahora sí, entramos a res.data porque ahí viene el email
+            // Validamos la estructura según tu JSON
             if (res.status === true && res.data && res.data.email) {
                 let emailGenerado = res.data.email; 
 
@@ -21,13 +28,26 @@ export default {
 
                 await sock.sendMessage(from, { text: txt }, { quoted: m });
             } else {
-                // Si la estructura cambia, esto nos avisará
-                await sock.sendMessage(from, { text: "❌ Error: La API cambió la estructura o el correo no llegó." }, { quoted: m });
+                console.error("❌ Estructura de API inesperada:", res);
+                await sock.sendMessage(from, { 
+                    text: "❌ Error: No se pudo generar el correo. La API cambió o está en mantenimiento." 
+                }, { quoted: m });
             }
 
         } catch (e) {
-            console.error("ERROR EN TEMPMAIL:", e.message);
-            await sock.sendMessage(from, { text: "⚠️ El servidor está fallando." });
+            console.error("--- ERROR TEMPMAIL DETALLADO ---");
+            if (e.response) {
+                // Error del servidor de la API (403, 404, 500)
+                console.error("Status:", e.response.status);
+                console.error("Data:", e.response.data);
+            } else if (e.request) {
+                // No hubo respuesta del servidor
+                console.error("No se recibió respuesta del servidor de Evo.");
+            } else {
+                console.error("Mensaje:", e.message);
+            }
+
+            await sock.sendMessage(from, { text: "⚠️ El servidor de correos está fallando. Intenta de nuevo más tarde." });
         }
     }
 };

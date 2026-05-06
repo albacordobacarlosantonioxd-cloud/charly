@@ -17,13 +17,15 @@ export default {
             const key = "sasuke";
 
             // 1. Descargar imagen de WhatsApp
+            console.log("--- STEP 1: Descargando imagen de WA ---");
             const stream = await downloadContentFromMessage(imageMsg, 'image');
             let buffer = Buffer.from([]);
             for await (const chunk of stream) {
                 buffer = Buffer.concat([buffer, chunk]);
             }
 
-            // 2. Subir a Uploader (Captura image_50e5f6.png)
+            // 2. Subir a Uploader
+            console.log("--- STEP 2: Subiendo a Evogb Uploader ---");
             const form = new FormData();
             form.append('file', buffer, { filename: 'image.jpg' });
             
@@ -31,40 +33,57 @@ export default {
                 headers: { ...form.getHeaders() }
             });
             
-            // Verificamos el enlace que nos da el uploader
             const directUrl = uploadRes.data.result || uploadRes.data.url;
-            console.log("🔗 Enlace generado:", directUrl); // Revisa esto en tu terminal
+            console.log("🔗 Enlace generado:", directUrl);
 
-            if (!directUrl) return sock.sendMessage(from, { text: "No se pudo subir la imagen." });
+            if (!directUrl) {
+                console.error("❌ Falló el uploader, respuesta:", uploadRes.data);
+                return sock.sendMessage(from, { text: "No se pudo subir la imagen al servidor temporal." });
+            }
 
-            // 3. Petición a Nano Banana (Captura image_5143b5.png)
-            // Agregamos un timeout para que no se quede colgado tu i3
+            // 3. Petición a Nano Banana
+            console.log("--- STEP 3: Procesando con Nano Banana IA ---");
             const response = await axios.get('https://api.evogb.org/ai/nanobanana', {
                 params: {
                     prompt: text,
                     url: directUrl,
                     key: key
                 },
-                timeout: 60000 // 60 segundos
+                timeout: 90000 // Aumentamos a 90 seg para Railway
             });
 
+            console.log("--- STEP 4: Respuesta de IA recibida ---");
             const imagenResultado = response.data.result || response.data.url;
 
             if (!imagenResultado) {
-                return sock.sendMessage(from, { text: "La IA no devolvió imagen (Error 500 en el servidor)." });
+                console.error("❌ La IA no devolvió URL. Respuesta:", response.data);
+                return sock.sendMessage(from, { text: "La IA no devolvió imagen (Posible error interno de la API)." });
             }
 
             await sock.sendMessage(from, { 
-                image: { url: imagenResultado }
+                image: { url: imagenResultado },
+                caption: "✅ ¡Listo! Aquí tienes tu imagen editada."
             }, { quoted: m });
 
         } catch (e) {
-            // Si el error es 500, mostramos la respuesta del servidor en consola
+            console.error("--- ERROR NANOBANANA DETALLADO ---");
             if (e.response) {
-                console.error("DETALLE ERROR 500:", e.response.data);
+                // El servidor respondió con error (ej. 500, 403, 404)
+                console.error("Fase: Petición HTTP");
+                console.error("Status:", e.response.status);
+                console.error("Data:", e.response.data);
+                
+                let msgError = e.response.status === 500 
+                    ? "Error 500: El servidor de Evo colapsó procesando la imagen." 
+                    : `Error de API: ${e.response.status}`;
+                await sock.sendMessage(from, { text: msgError });
+            } else if (e.code === 'ECONNABORTED') {
+                console.error("Error: Tiempo de espera agotado (Timeout)");
+                await sock.sendMessage(from, { text: "La IA tardó demasiado en responder. Reintenta en un momento." });
+            } else {
+                console.error("Mensaje:", e.message);
+                await sock.sendMessage(from, { text: `Error inesperado: ${e.message}` });
             }
-            console.error("ERROR NB:", e.message);
-            await sock.sendMessage(from, { text: "Error 500: El servidor de Evo no pudo procesar esta imagen." });
         }
     }
 };
