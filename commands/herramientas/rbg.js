@@ -6,25 +6,37 @@ export default {
     category: 'tools',
     aliases: ["rbg", "quitarfondo"],
     run: async (sock, m, from, text, quoted, args) => {
+        // Mejoramos la detección del objeto de mensaje
         const q = m.quoted ? m.quoted : m;
-        const mime = (q.msg || q).mimetype || '';
+        
+        // Intentamos obtener el mimetype de varias fuentes posibles en el objeto
+        const mime = (q.msg || q).mimetype || q.mediaType || '';
 
+        console.log("DEBUG RBG: Mimetype detectado ->", mime);
+
+        // Si no detecta imagen, forzamos un log para ver qué objeto está recibiendo
         if (!/image/.test(mime)) {
-            console.log("DEBUG RBG: El archivo no es una imagen o no hay nada");
+            console.log("DEBUG RBG: No se detectó imagen. Objeto recibido:", JSON.stringify(q, null, 2));
             return;
         }
 
         try {
-            console.log("DEBUG RBG: Descargando media de WhatsApp...");
-            const media = await q.download();
-            console.log("DEBUG RBG: Media descargada. Tamaño:", media.length, "bytes");
+            console.log("DEBUG RBG: Descargando media...");
+            // Usamos una descarga más robusta
+            const media = await q.download?.() || await sock.downloadMediaMessage(q);
+            
+            if (!media) {
+                console.log("DEBUG RBG: Error al descargar el archivo (Buffer vacío)");
+                return;
+            }
+
+            console.log("DEBUG RBG: Media descargada. Tamaño:", media.length);
 
             const key = "sasuke";
 
             // 1. Subir para obtener URL
-            console.log("DEBUG RBG: Intentando subir al uploader...");
             const form = new FormData();
-            form.append('file', media, { filename: 'image.png' });
+            form.append('file', media, { filename: 'image.png', contentType: mime });
 
             const uploadRes = await axios.post(`https://api.evogb.org/tools/upload?key=${key}`, form, {
                 headers: { ...form.getHeaders() }
@@ -32,42 +44,27 @@ export default {
 
             console.log("DEBUG RBG: Respuesta uploader:", uploadRes.data);
 
-            const imgUrl = uploadRes.data.url || uploadRes.data.result;
+            const imgUrl = uploadRes.data.url || uploadRes.data.result || uploadRes.data.data?.url;
+            
             if (!imgUrl) {
-                console.log("DEBUG RBG: No se obtuvo URL del uploader");
+                console.log("DEBUG RBG: No se encontró URL en la respuesta");
                 return;
             }
-            console.log("DEBUG RBG: URL obtenida:", imgUrl);
 
             // 2. Procesar Remove Background
             const urlFinal = `https://api.evogb.org/tools/removebg?url=${encodeURIComponent(imgUrl)}&key=${key}`;
-            console.log("DEBUG RBG: Llamando a removebg...");
+            const response = await axios.get(urlFinal, { responseType: 'arraybuffer' });
 
-            const response = await axios.get(urlFinal, { 
-                responseType: 'arraybuffer',
-                timeout: 30000 // Le damos 30s porque procesar imágenes cansa al servidor
-            });
+            // 3. Enviar
+            await sock.sendMessage(from, { 
+                image: Buffer.from(response.data)
+            }, { quoted: m });
 
-            console.log("DEBUG RBG: Respuesta de removebg recibida. Status:", response.status);
-
-            // 3. Enviar la imagen
-            if (response.data) {
-                console.log("DEBUG RBG: Enviando imagen a WhatsApp...");
-                await sock.sendMessage(from, { 
-                    image: Buffer.from(response.data)
-                }, { quoted: m });
-                console.log("DEBUG RBG: ¡Enviado!");
-            }
+            console.log("DEBUG RBG: ¡Éxito total!");
 
         } catch (e) {
-            console.error("--- ERROR ESPECÍFICO EN REMOVEBG ---");
-            if (e.response) {
-                // El servidor respondió con error (403, 500, etc)
-                console.error("Status:", e.response.status);
-                console.error("Data:", e.response.data.toString());
-            } else {
-                console.error("Mensaje de error:", e.message);
-            }
+            console.error("--- ERROR EN EJECUCIÓN ---");
+            console.error(e.stack); // Usamos stack para ver exactamente en qué línea falló
         }
     }
 };
