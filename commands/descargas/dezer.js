@@ -1,4 +1,4 @@
-import axios from "axios";
+import evogb from "../../lib/apiClient.js";
 
 export default {
     name: "deezer",
@@ -18,7 +18,7 @@ export default {
 
             // STEP 1: Buscar
             console.log("--- BUSCANDO EN DEEZER ---");
-            const searchRes = await axios.get(`https://api.evogb.org/search/deezer?query=${encodeURIComponent(text)}&limit=1&key=${key}`, { headers });
+            const searchRes = await evogb.get(`https://api.evogb.org/search/deezer?query=${encodeURIComponent(text)}&limit=1&key=${key}`, { headers });
             
             const resultado = searchRes.data.result?.[0];
             if (!resultado || !resultado.link) return;
@@ -26,7 +26,7 @@ export default {
             // STEP 2: Descargar (Aquí es donde suele dar el 403)
             console.log("--- OBTENIENDO AUDIO ---");
             const dlUrl = `https://api.evogb.org/dl/deezer?url=${encodeURIComponent(resultado.link)}&key=${key}`;
-            const dlRes = await axios.get(dlUrl, { headers });
+            const dlRes = await evogb.get(dlUrl, { headers });
             
             const finalData = dlRes.data.result;
             const audioUrl = finalData?.url || finalData?.download;

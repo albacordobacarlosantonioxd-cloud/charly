@@ -1,4 +1,4 @@
-import axios from "axios";
+import evogb from "../../lib/apiClient.js";
 
 export default {
     name: "spotifysearch",
@@ -14,7 +14,7 @@ export default {
             console.log("--- DEBUG SP SEARCH ---");
             console.log("Buscando:", text);
 
-            const response = await axios.get(urlFinal);
+            const response = await evogb.get(urlFinal);
             const res = response.data;
 
             if (res.status && res.result && res.result.length > 0) {

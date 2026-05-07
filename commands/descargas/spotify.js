@@ -1,4 +1,4 @@
-import axios from "axios";
+import evogb from "../../lib/apiClient.js";
 
 export default {
     name: "spotify",
@@ -18,7 +18,7 @@ export default {
             console.log("Descargando link:", text);
 
             // Aumentamos el timeout a 60 segundos porque las descargas tardan
-            const response = await axios.get(urlFinal, { timeout: 60000 });
+            const response = await evogb.get(urlFinal, { timeout: 60000 });
             
             // Log para ver qué campos trae el resultado
             console.log("Respuesta API Spotify DL:", JSON.stringify(response.data).slice(0, 250) + "...");

@@ -1,4 +1,4 @@
-import axios from "axios";
+import evogb from "../../lib/apiClient.js";
 
 export default {
     name: "apk",
@@ -12,7 +12,7 @@ export default {
 
             // STEP 1: Buscar la APK (Endpoint 1)
             console.log("--- BUSCANDO APK ---");
-            const searchRes = await axios.get(`https://api.evogb.org/search/apk?query=${encodeURIComponent(text)}&key=${key}`);
+            const searchRes = await evogb.get(`https://api.evogb.org/search/apk?query=${encodeURIComponent(text)}&key=${key}`);
             
             // Accedemos al primer resultado de la lista
             const resultado = searchRes.data.result?.[0];
@@ -25,7 +25,7 @@ export default {
 
             // STEP 2: Obtener el link de descarga directo (Endpoint 2)
             console.log("--- OBTENIENDO LINK DE DESCARGA ---");
-            const dlRes = await axios.get(`https://api.evogb.org/dl/apk?url=${encodeURIComponent(resultado.url)}&key=${key}`);
+            const dlRes = await evogb.get(`https://api.evogb.org/dl/apk?url=${encodeURIComponent(resultado.url)}&key=${key}`);
             
             const finalData = dlRes.data.result;
             const linkDirecto = finalData?.url || finalData?.download;

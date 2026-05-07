@@ -1,4 +1,4 @@
-import axios from "axios";
+import evogb from "../../lib/apiClient.js";
 
 export default {
     name: "copilot",
@@ -11,7 +11,7 @@ export default {
             const key = process.env.MISTRAL_API_KEY; 
             const urlFinal = `https://api.evogb.org/ai/copilot?text=${encodeURIComponent(text)}&key=${key}`;
 
-            const response = await axios.get(urlFinal);
+            const response = await evogb.get(urlFinal);
             const respuestaIA = response.data.result || response.data.response || response.data.data;
 
             if (!respuestaIA) {

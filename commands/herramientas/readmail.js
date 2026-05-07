@@ -1,4 +1,4 @@
-import axios from "axios";
+import evogb from "../../lib/apiClient.js";
 
 export default {
     name: "readmail",
@@ -13,7 +13,7 @@ export default {
             console.log("--- DEBUG READMAIL ---");
             console.log("Revisando bandeja de:", text);
 
-            const response = await axios.get(urlFinal, { timeout: 15000 });
+            const response = await evogb.get(urlFinal, { timeout: 15000 });
             
             // Log para ver si la API devuelve un array, un objeto o un error
             console.log("Respuesta completa Readmail:", JSON.stringify(response.data));

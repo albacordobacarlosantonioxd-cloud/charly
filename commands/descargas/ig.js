@@ -1,4 +1,4 @@
-import axios from "axios";
+import evogb from "../../lib/apiClient.js";
 
 export default {
     name: "instagram",
@@ -19,7 +19,7 @@ export default {
             console.log("--- DEBUG INSTAGRAM DL ---");
             console.log("Procesando link:", text);
 
-            const response = await axios.get(urlFinal, { timeout: 60000 });
+            const response = await evogb.get(urlFinal, { timeout: 60000 });
             
             // Log para ver si la API devuelve un objeto único o un array (carrusel)
             console.log("Respuesta API Instagram:", JSON.stringify(response.data).slice(0, 300) + "...");

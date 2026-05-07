@@ -1,4 +1,4 @@
-import axios from "axios";
+import evogb from "../../lib/apiClient.js";
 import FormData from "form-data";
 import { downloadContentFromMessage } from "@whiskeysockets/baileys";
 
@@ -26,7 +26,7 @@ export default {
             const form = new FormData();
             form.append('file', buffer, { filename: 'image.jpg' });
             
-            const uploadRes = await axios.post('https://api.evogb.org/tools/upload', form, {
+            const uploadRes = await evogb.post('https://api.evogb.org/tools/upload', form, {
                 headers: { ...form.getHeaders() }
             });
             
@@ -39,7 +39,7 @@ export default {
             // Probamos enviando la URL sin encode por si la API de ellos prefiere el formato crudo
             const urlFinal = `https://api.evogb.org/tools/removebg?url=${directUrl}&key=${key}`;
             
-            const response = await axios.get(urlFinal, { 
+            const response = await evogb.get(urlFinal, { 
                 responseType: 'arraybuffer',
                 timeout: 60000 
             });
