@@ -3,7 +3,7 @@ import axios from "axios";
 export default {
     name: "deezer",
     category: 'tools',
-    aliases: ["play", "musica"],
+    aliases: ["musica"],
     run: async (sock, m, from, text, quoted, args) => {
         if (!text) return;
 
@@ -17,35 +17,55 @@ export default {
             };
 
             // STEP 1: Buscar
-            console.log("--- BUSCANDO EN DEEZER ---");
+            console.log("--- DEBUG BUSQUEDA: INICIANDO ---");
             const searchRes = await axios.get(`https://api.evogb.org/search/deezer?query=${encodeURIComponent(text)}&limit=1&key=${key}`, { headers });
             
+            console.log("--- RESPUESTA BUSQUEDA DATA: ---", JSON.stringify(searchRes.data, null, 2));
+            
             const resultado = searchRes.data.result?.[0];
-            if (!resultado || !resultado.link) return;
+            if (!resultado || !resultado.link) {
+                console.log("--- AVISO: No se encontraron resultados o link de Deezer ---");
+                return;
+            }
 
-            // STEP 2: Descargar (Aquí es donde suele dar el 403)
-            console.log("--- OBTENIENDO AUDIO ---");
+            // STEP 2: Descargar
+            console.log("--- DEBUG DOWNLOAD: OBTENIENDO URL FINAL ---");
             const dlUrl = `https://api.evogb.org/dl/deezer?url=${encodeURIComponent(resultado.link)}&key=${key}`;
+            console.log("URL DE PETICIÓN DL:", dlUrl);
+
             const dlRes = await axios.get(dlUrl, { headers });
+            
+            console.log("--- RESPUESTA DOWNLOAD DATA: ---", JSON.stringify(dlRes.data, null, 2));
             
             const finalData = dlRes.data.result;
             const audioUrl = finalData?.url || finalData?.download;
 
-            if (!audioUrl) return;
+            if (!audioUrl) {
+                console.log("--- AVISO: No se obtuvo audioUrl de la respuesta final ---");
+                return;
+            }
 
             // STEP 3: Enviar
-            console.log("--- ENVIANDO MP3 ---");
+            console.log("--- DEBUG ENVIO: ENVIANDO MP3 AL USUARIO ---");
+            console.log("URL FINAL DEL ARCHIVO:", audioUrl);
+
             await sock.sendMessage(from, {
                 document: { url: audioUrl },
                 fileName: `${resultado.artist.name} - ${resultado.title}.mp3`,
                 mimetype: 'audio/mpeg'
             }, { quoted: m });
 
+            console.log("--- DEBUG: PROCESO COMPLETADO EXITOSAMENTE ---");
+
         } catch (e) {
-            console.error("--- DEBUG DEEZER 403 ---");
-            console.error("Mensaje:", e.message);
+            console.error("--- !!! DEBUG ERROR DEEZER !!! ---");
+            console.error("Mensaje de error:", e.message);
             if (e.response) {
-                console.error("Data del error:", e.response.data);
+                console.error("Status del error:", e.response.status);
+                console.error("Data del error (Cuerpo):", JSON.stringify(e.response.data, null, 2));
+                console.error("Headers del error:", e.response.headers);
+            } else if (e.request) {
+                console.error("No hubo respuesta de la API (Request enviado)");
             }
         }
     }

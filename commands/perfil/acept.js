@@ -1,7 +1,7 @@
-import { proposals } from "./marry.js"; // Importamos la RAM del otro archivo
+import { proposals } from "./marry.js"; 
 import { User } from "../../index.js";
 
-aasync function run(sock, m, from) {
+const run = async (sock, m, { from }) => {
     const acceptor = m.sender; 
     const proposer = proposals[acceptor]; 
 
@@ -10,20 +10,18 @@ aasync function run(sock, m, from) {
     }
 
     try {
-        // Buscamos los datos en la DB
         const userProposer = await User.findOne({ jid: proposer });
         const userAcceptor = await User.findOne({ jid: acceptor });
 
-        // LÓGICA DE NOMBRES MEJORADA:
-        // 1. Prioridad: Nombre en DB. 2. PushName de WhatsApp. 3. Número de teléfono.
+        // Obtenemos nombres reales de forma segura
         const nameProposer = userProposer?.name || (await sock.getName(proposer)) || proposer.split('@')[0];
         const nameAcceptor = userAcceptor?.name || m.pushName || (await sock.getName(acceptor)) || acceptor.split('@')[0];
 
-        // ACTUALIZACIÓN EN MONGODB ATLAS (Aquí está el truco: guardamos el nombre del OTRO)
+        // Guardamos en MongoDB Atlas
         await User.updateOne({ jid: proposer }, { $set: { marry: acceptor, marryName: nameAcceptor } });
         await User.updateOne({ jid: acceptor }, { $set: { marry: proposer, marryName: nameProposer } });
 
-        // Sincronizar global.db (si lo usas para el comando .perfil)
+        // Sincronizar global.db
         if (global.db?.data?.users) {
             if (global.db.data.users[proposer]) {
                 global.db.data.users[proposer].marry = acceptor;
@@ -38,14 +36,19 @@ aasync function run(sock, m, from) {
         delete proposals[acceptor];
 
         return sock.sendMessage(from, { 
-            text: `💍 ¡Felicidades! *${nameProposer}* y *${nameAcceptor}* ahora están legalmente casados. 🥂\n\n_Ahora ambos pueden revisar su .perfil_`,
+            text: `💍 ¡Felicidades! *${nameProposer}* y *${nameAcceptor}* ahora están legalmente casados. 🥂`,
             mentions: [proposer, acceptor]
         }, { quoted: m });
 
     } catch (e) {
-        console.error(e);
-        return sock.sendMessage(from, { text: '❌ Error en la base de datos.' }, { quoted: m });
+        console.error("Error en accept.js:", e);
+        return sock.sendMessage(from, { text: '❌ Error al procesar la boda en la base de datos.' }, { quoted: m });
     }
-}
+};
 
-export default { name: 'acept', category: 'perfil', aliases: ['aceptar'], run };
+export default { 
+    name: 'accept', 
+    category: 'perfil', 
+    aliases: ['aceptar'], 
+    run 
+};
