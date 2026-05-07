@@ -34,7 +34,7 @@ async function run(sock, m, from, text, quoted, args, isAdmin, isGroup) {
         const msg = `💍 *PROPUESTA DE MATRIMONIO*\n\n` +
                     `@${proposer.split('@')[0]} le ha pedido matrimonio a @${proposee.split('@')[0]}.\n\n` +
                     `⚘ *Para aceptar, @${proposee.split('@')[0]} debe responder con:* \n` +
-                    `> *.accept*\n\n` +
+                    `> *.acept*\n\n` +
                     `⌛ _Expira en 2 minutos._`;
 
         return sock.sendMessage(from, { text: msg, mentions: [proposer, proposee] }, { quoted: m });
