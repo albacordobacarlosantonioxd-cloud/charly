@@ -30,20 +30,18 @@ export default {
             }
 
             // STEP 2: Descargar
-            console.log("--- DEBUG DOWNLOAD: OBTENIENDO URL FINAL ---");
-            const dlUrl = `https://api.evogb.org/dl/deezer?url=${encodeURIComponent(resultado.url)}&key=${key}`;
-            
-            const dlRes = await axios.get(dlUrl, { headers });
-            
-            // Verificamos si la descarga también cambió su estructura
-            const finalData = dlRes.data.data || dlRes.data.result; 
-            const audioUrl = finalData?.url || finalData?.download;
+           console.log("--- DEBUG DOWNLOAD: OBTENIENDO URL FINAL ---");
+const dlUrl = `https://api.evogb.org/dl/deezer?url=${encodeURIComponent(resultado.url)}&key=${key}`;
+const dlRes = await axios.get(dlUrl, { headers });
 
-            if (!audioUrl) {
-                console.log("--- ERROR: No se pudo obtener el audioUrl final ---");
-                console.log("Respuesta de DL recibida:", JSON.stringify(dlRes.data, null, 2));
-                return;
-            }
+// Aquí está el truco: buscamos .dl directamente en .data o en .data.data
+const audioUrl = dlRes.data?.dl || dlRes.data?.data?.dl || dlRes.data?.result?.dl;
+
+if (!audioUrl) {
+    console.log("--- ERROR: No se pudo obtener el audioUrl final ---");
+    console.log("Cuerpo completo recibido:", JSON.stringify(dlRes.data, null, 2));
+    return;
+}
 
             // STEP 3: Enviar
             await sock.sendMessage(from, {
