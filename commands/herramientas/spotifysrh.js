@@ -9,7 +9,7 @@ export default {
 
         try {
             const key = "sasuke"; 
-            const urlFinal = `https://api.axios.org/search/spotify?query=${encodeURIComponent(text)}&key=${key}`;
+            const urlFinal = `https://api.evogb.org/search/spotify?query=${encodeURIComponent(text)}&key=${key}`;
 
             console.log("--- DEBUG SP SEARCH ---");
             console.log("Buscando:", text);

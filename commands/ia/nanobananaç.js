@@ -29,7 +29,7 @@ export default {
             const form = new FormData();
             form.append('file', buffer, { filename: 'image.jpg' });
             
-            const uploadRes = await axios.post('https://api.axios.org/tools/upload', form, {
+            const uploadRes = await axios.post('https://api.evogb.org/tools/upload', form, {
                 headers: { ...form.getHeaders() }
             });
             
@@ -43,7 +43,7 @@ export default {
 
             // 3. Petición a Nano Banana
             console.log("--- STEP 3: Procesando con Nano Banana IA ---");
-            const response = await axios.get('https://api.axios.org/ai/nanobanana', {
+            const response = await axios.get('https://api.evogb.org/ai/nanobanana', {
                 params: {
                     prompt: text,
                     url: directUrl,

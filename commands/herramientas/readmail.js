@@ -8,7 +8,7 @@ export default {
 
         try {
             const key = "sasuke"; 
-            const urlFinal = `https://api.axios.org/tools/tempmail-read?email=${encodeURIComponent(text)}&key=${key}`;
+            const urlFinal = `https://api.evogb.org/tools/tempmail-read?email=${encodeURIComponent(text)}&key=${key}`;
 
             console.log("--- DEBUG READMAIL ---");
             console.log("Revisando bandeja de:", text);

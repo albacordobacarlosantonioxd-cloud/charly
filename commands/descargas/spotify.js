@@ -12,7 +12,7 @@ export default {
 
         try {
             const key = "sasuke"; 
-            const urlFinal = `https://api.axios.org/dl/spotify?url=${encodeURIComponent(text)}&key=${key}`;
+            const urlFinal = `https://api.evogb.org/dl/spotify?url=${encodeURIComponent(text)}&key=${key}`;
 
             console.log("--- DEBUG SPOTIFY DL ---");
             console.log("Descargando link:", text);

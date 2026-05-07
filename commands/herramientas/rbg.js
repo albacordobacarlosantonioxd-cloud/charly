@@ -26,7 +26,7 @@ export default {
             const form = new FormData();
             form.append('file', buffer, { filename: 'image.jpg' });
             
-            const uploadRes = await axios.post('https://api.axios.org/tools/upload', form, {
+            const uploadRes = await axios.post('https://api.evogb.org/tools/upload', form, {
                 headers: { ...form.getHeaders() }
             });
             
@@ -37,7 +37,7 @@ export default {
 
             console.log("--- STEP 3: Quitando fondo ---");
             // Probamos enviando la URL sin encode por si la API de ellos prefiere el formato crudo
-            const urlFinal = `https://api.axios.org/tools/removebg?url=${directUrl}&key=${key}`;
+            const urlFinal = `https://api.evogb.org/tools/removebg?url=${directUrl}&key=${key}`;
             
             const response = await axios.get(urlFinal, { 
                 responseType: 'arraybuffer',

@@ -9,14 +9,14 @@ export default {
 
         try {
             const key = "sasuke"; 
-            const urlFinal = `https://api.axios.org/ai/claude?text=${encodeURIComponent(text)}&key=${key}`;
+            const urlFinal = `https://api.evogb.org/ai/claude?text=${encodeURIComponent(text)}&key=${key}`;
 
             const response = await axios.get(urlFinal, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                     'Accept': 'application/json',
                     'Accept-Language': 'es-MX,es;q=0.9',
-                    'Referer': 'https://api.axios.org/',
+                    'Referer': 'https://api.evogb.org/',
                     'Connection': 'keep-alive'
                 },
                 timeout: 20000 // Aumentado a 20s por estabilidad

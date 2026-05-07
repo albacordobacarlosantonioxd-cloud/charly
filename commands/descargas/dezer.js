@@ -12,20 +12,20 @@ export default {
             const headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 'Accept': 'application/json, text/plain, */*',
-                'Referer': 'https://api.axios.org/',
-                'Origin': 'https://api.axios.org'
+                'Referer': 'https://api.evogb.org/',
+                'Origin': 'https://api.evogb.org'
             };
 
             // STEP 1: Buscar
             console.log("--- BUSCANDO EN DEEZER ---");
-            const searchRes = await axios.get(`https://api.axios.org/search/deezer?query=${encodeURIComponent(text)}&limit=1&key=${key}`, { headers });
+            const searchRes = await axios.get(`https://api.evogb.org/search/deezer?query=${encodeURIComponent(text)}&limit=1&key=${key}`, { headers });
             
             const resultado = searchRes.data.result?.[0];
             if (!resultado || !resultado.link) return;
 
             // STEP 2: Descargar (Aquí es donde suele dar el 403)
             console.log("--- OBTENIENDO AUDIO ---");
-            const dlUrl = `https://api.axios.org/dl/deezer?url=${encodeURIComponent(resultado.link)}&key=${key}`;
+            const dlUrl = `https://api.evogb.org/dl/deezer?url=${encodeURIComponent(resultado.link)}&key=${key}`;
             const dlRes = await axios.get(dlUrl, { headers });
             
             const finalData = dlRes.data.result;

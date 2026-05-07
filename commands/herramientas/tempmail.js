@@ -6,7 +6,7 @@ export default {
     run: async (sock, m, from, text, quoted) => {
         try {
             const key = "sasuke"; 
-            const urlFinal = `https://api.axios.org/tools/tempmail?key=${key}`;
+            const urlFinal = `https://api.evogb.org/tools/tempmail?key=${key}`;
 
             console.log("--- DEBUG TEMPMAIL ---");
             console.log("Solicitando correo temporal...");

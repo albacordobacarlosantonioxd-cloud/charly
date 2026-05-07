@@ -11,7 +11,7 @@ export default {
 
         try {
             const key = "sasuke"; 
-            const urlFinal = `https://api.axios.org/dl/instagram?url=${encodeURIComponent(text)}&key=${key}`;
+            const urlFinal = `https://api.evogb.org/dl/instagram?url=${encodeURIComponent(text)}&key=${key}`;
 
             // Reacción de espera
             await sock.sendMessage(from, { react: { text: "⏳", key: m.key } });

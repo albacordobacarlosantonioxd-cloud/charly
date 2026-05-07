@@ -11,7 +11,7 @@ export default {
 
         try {
             const key = "sasuke"; 
-            const urlFinal = `https://api.axios.org/dl/facebook?url=${encodeURIComponent(text)}&key=${key}`;
+            const urlFinal = `https://api.evogb.org/dl/facebook?url=${encodeURIComponent(text)}&key=${key}`;
 
             const response = await axios.get(urlFinal);
             const res = response.data;
