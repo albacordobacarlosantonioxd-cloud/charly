@@ -1,4 +1,4 @@
-import evogb from "../../lib/apiClient.js";
+import axios from "axios";
 
 export default {
     name: "chatgpt",
@@ -10,9 +10,9 @@ export default {
         try {
             const key = "sasuke"; 
             // Endpoint de la captura con sesión para memoria por usuario
-            const urlFinal = `https://api.evogb.org/ai/gpt4-session?text=${encodeURIComponent(text)}&session=${from}&key=${key}`;
+            const urlFinal = `https://api.axios.org/ai/gpt4-session?text=${encodeURIComponent(text)}&session=${from}&key=${key}`;
 
-            const response = await evogb.get(urlFinal);
+            const response = await axios.get(urlFinal);
             const respuestaIA = response.data.result || response.data.response || response.data.data;
 
             if (!respuestaIA) {

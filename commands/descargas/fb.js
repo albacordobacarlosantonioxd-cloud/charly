@@ -1,4 +1,4 @@
-import evogb from "../../lib/apiClient.js";
+import axios from "axios";
 
 export default {
     name: "facebook",
@@ -11,9 +11,9 @@ export default {
 
         try {
             const key = "sasuke"; 
-            const urlFinal = `https://api.evogb.org/dl/facebook?url=${encodeURIComponent(text)}&key=${key}`;
+            const urlFinal = `https://api.axios.org/dl/facebook?url=${encodeURIComponent(text)}&key=${key}`;
 
-            const response = await evogb.get(urlFinal);
+            const response = await axios.get(urlFinal);
             const res = response.data;
             const data = res.result || res.data;
 

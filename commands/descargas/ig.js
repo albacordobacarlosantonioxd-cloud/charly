@@ -1,4 +1,4 @@
-import evogb from "../../lib/apiClient.js";
+import axios from "axios";
 
 export default {
     name: "instagram",
@@ -11,7 +11,7 @@ export default {
 
         try {
             const key = "sasuke"; 
-            const urlFinal = `https://api.evogb.org/dl/instagram?url=${encodeURIComponent(text)}&key=${key}`;
+            const urlFinal = `https://api.axios.org/dl/instagram?url=${encodeURIComponent(text)}&key=${key}`;
 
             // Reacción de espera
             await sock.sendMessage(from, { react: { text: "⏳", key: m.key } });
@@ -19,7 +19,7 @@ export default {
             console.log("--- DEBUG INSTAGRAM DL ---");
             console.log("Procesando link:", text);
 
-            const response = await evogb.get(urlFinal, { timeout: 60000 });
+            const response = await axios.get(urlFinal, { timeout: 60000 });
             
             // Log para ver si la API devuelve un objeto único o un array (carrusel)
             console.log("Respuesta API Instagram:", JSON.stringify(response.data).slice(0, 300) + "...");

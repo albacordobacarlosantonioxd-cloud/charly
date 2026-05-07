@@ -1,4 +1,4 @@
-import evogb from "../../lib/apiClient.js";
+import axios from "axios";
 
 export default {
     name: "tempmail",
@@ -6,12 +6,12 @@ export default {
     run: async (sock, m, from, text, quoted) => {
         try {
             const key = "sasuke"; 
-            const urlFinal = `https://api.evogb.org/tools/tempmail?key=${key}`;
+            const urlFinal = `https://api.axios.org/tools/tempmail?key=${key}`;
 
             console.log("--- DEBUG TEMPMAIL ---");
             console.log("Solicitando correo temporal...");
 
-            const response = await evogb.get(urlFinal, { timeout: 10000 });
+            const response = await axios.get(urlFinal, { timeout: 10000 });
             
             // Log para ver qué llega exactamente de la API en el servidor
             console.log("Respuesta completa Tempmail:", JSON.stringify(response.data));

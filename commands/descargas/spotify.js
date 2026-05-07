@@ -1,4 +1,4 @@
-import evogb from "../../lib/apiClient.js";
+import axios from "axios";
 
 export default {
     name: "spotify",
@@ -12,13 +12,13 @@ export default {
 
         try {
             const key = "sasuke"; 
-            const urlFinal = `https://api.evogb.org/dl/spotify?url=${encodeURIComponent(text)}&key=${key}`;
+            const urlFinal = `https://api.axios.org/dl/spotify?url=${encodeURIComponent(text)}&key=${key}`;
 
             console.log("--- DEBUG SPOTIFY DL ---");
             console.log("Descargando link:", text);
 
             // Aumentamos el timeout a 60 segundos porque las descargas tardan
-            const response = await evogb.get(urlFinal, { timeout: 60000 });
+            const response = await axios.get(urlFinal, { timeout: 60000 });
             
             // Log para ver qué campos trae el resultado
             console.log("Respuesta API Spotify DL:", JSON.stringify(response.data).slice(0, 250) + "...");
