@@ -24,50 +24,50 @@ export default {
                 buffer = Buffer.concat([buffer, chunk]);
             }
 
+            // Creamos el FormData
             const formData = new FormData();
-            formData.append('image', buffer, { 
+            // Cambiamos 'image' por 'file' que es lo que suele pedir esta API
+            formData.append('file', buffer, { 
                 filename: 'image.jpg', 
                 contentType: 'image/jpeg' 
             });
 
             const apiKey = "sasuke";
-            // Nota: Cambié el parámetro de 'apikey' a 'key' que es el estándar de EvoGB, 
-            // y puse responseType: 'arraybuffer'
-            const apiUrl = `https://api.evogb.org/tools/upscale?key=${apiKey}`;
+            const apiUrl = `https://api.evogb.org/tools/upscale?apikey=${apiKey}`;
 
             const response = await axios.post(apiUrl, formData, {
                 headers: {
                     ...formData.getHeaders(),
+                    // User-Agent de Chrome para que no nos bloqueen
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 },
-                responseType: 'arraybuffer', // CLAVE: Recibimos la imagen directamente
-                timeout: 90000 
+                responseType: 'arraybuffer', 
+                timeout: 120000 // Aumentamos a 2 minutos por si la IA está lenta
             });
 
-            // Si la respuesta es exitosa, el buffer de la foto está en response.data
             if (response.data) {
+                // Verificamos si lo que regresó es una imagen o un JSON de error camuflado
+                const beginning = response.data.slice(0, 50).toString();
+                if (beginning.includes('{"status":false') || beginning.includes('{"error"')) {
+                    const errData = JSON.parse(response.data.toString());
+                    throw new Error(errData.message || "La API falló al procesar.");
+                }
+
                 await sock.sendMessage(from, { 
                     image: Buffer.from(response.data), 
                     caption: '✅ *Calidad mejorada exitosamente.*',
                     mimetype: 'image/jpeg' 
                 }, { quoted: m });
-            } else {
-                throw new Error('No se recibió contenido de imagen.');
             }
 
         } catch (err) {
-            console.error("ERROR EN HD:", err);
-            
-            let msg = "Error al procesar la imagen.";
-            if (err.response && err.response.data) {
-                // Si falló y mandó un JSON de error en vez de la imagen
-                try {
-                    const errorJson = JSON.parse(err.response.data.toString());
-                    msg = errorJson.message || msg;
-                } catch (e) {
-                    msg = "La API está saturada o el archivo es muy pesado.";
-                }
+            console.error("--- DEBUG ERROR HD ---");
+            // Si es un Error 500, es probable que la imagen sea muy grande o la API esté caída
+            if (err.response?.status === 500) {
+                return sock.sendMessage(from, { text: "❌ El servidor de la API tuvo un error interno (500). Intenta con una foto más pequeña o espera un momento." }, { quoted: m });
             }
             
+            let msg = err.message || "Error desconocido";
             sock.sendMessage(from, { text: `❌ Error: ${msg}` }, { quoted: m });
         }
     }
