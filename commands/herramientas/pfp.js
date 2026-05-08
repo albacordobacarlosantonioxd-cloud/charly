@@ -1,42 +1,46 @@
-import { resolveLidToRealJid } from "../core/utils.js";
-
 export default {
     name: 'pfp',
     category: 'herramientas',
     run: async (sock, m, from) => {
         try {
-            // 1. Extraer ID con triple validación
-            let who = m.quoted?.sender || (m.mentionedJid && m.mentionedJid[0]) || m.sender;
+            // 1. Obtener quién es el objetivo (citado, mención o el que escribe)
+            let who;
+            if (m.isGroup) {
+                who = m.quoted ? m.quoted.sender : (m.mentionedJid && m.mentionedJid[0]) ? m.mentionedJid[0] : m.sender;
+            } else {
+                who = m.quoted ? m.quoted.sender : m.sender;
+            }
 
-            // 2. Si por alguna razón 'who' sigue siendo undefined, usamos el remitente actual
-            if (!who) who = m.sender;
+            // 2. Limpieza de JID ultra segura
+            const targetJid = who.includes('@') ? who.split(':')[0] + '@s.whatsapp.net' : who;
 
-            // 3. Limpieza para evitar conflictos en Zorin OS
-            const cleanId = String(who).split(':')[0] + '@s.whatsapp.net';
-
+            // Reacción de búsqueda
             await sock.sendMessage(from, { react: { text: '🔍', key: m.key } });
-
-            // 4. Resolver JID (con la nueva función blindada ya no habrá error de toString)
-            const targetJid = await resolveLidToRealJid(cleanId, sock, from) || cleanId;
 
             let pp;
             try {
+                // Intentamos obtener la foto HD
                 pp = await sock.profilePictureUrl(targetJid, 'image');
-            } catch {
+            } catch (e) {
+                // Si no tiene foto o hay error, foto por defecto
                 pp = 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png';
             }
 
             const number = targetJid.split('@')[0];
+
+            // 3. Envío con mención y validación de URL
             await sock.sendMessage(from, { 
                 image: { url: pp }, 
                 caption: `✨ *Foto de Perfil de:* @${number}`,
                 mentions: [targetJid]
             }, { quoted: m });
 
+            // Reacción de éxito
             await sock.sendMessage(from, { react: { text: '✅', key: m.key } });
 
         } catch (e) {
-            console.error("❌ Error controlado en PFP:", e.message);
+            // Este log te dirá exactamente qué pasó en la terminal de tu HP o Railway
+            console.error("❌ Error en comando PFP:", e);
         }
     }
 };
