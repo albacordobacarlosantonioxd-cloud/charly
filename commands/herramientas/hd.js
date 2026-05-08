@@ -24,48 +24,48 @@ export default {
                 buffer = Buffer.concat([buffer, chunk]);
             }
 
-            // 1. Preparamos el FormData SOLO para el archivo
             const formData = new FormData();
-            formData.append('file', buffer, { 
+            formData.append('image', buffer, { 
                 filename: 'image.jpg', 
                 contentType: 'image/jpeg' 
             });
 
-            // 2. PASAMOS LA API KEY EN LA URL (Esto soluciona el error 401)
             const apiKey = "sasuke";
-            const apiUrl = `https://api.evogb.org/tools/upscale?apikey=${apiKey}`;
+            // Nota: Cambié el parámetro de 'apikey' a 'key' que es el estándar de EvoGB, 
+            // y puse responseType: 'arraybuffer'
+            const apiUrl = `https://api.evogb.org/tools/upscale?key=${apiKey}`;
 
             const response = await axios.post(apiUrl, formData, {
                 headers: {
                     ...formData.getHeaders(),
                 },
-                timeout: 60000 // 60 segundos
+                responseType: 'arraybuffer', // CLAVE: Recibimos la imagen directamente
+                timeout: 90000 
             });
 
-            const data = response.data;
-            
-            // 3. Manejo de la respuesta (Dependiendo de cómo responda EvoGB)
-            // Probamos varias rutas comunes de respuesta
-            const finalImageUrl = data.result || data.url || data.data?.url || data.data;
-
-            if (finalImageUrl && typeof finalImageUrl === 'string' && finalImageUrl.startsWith('http')) {
+            // Si la respuesta es exitosa, el buffer de la foto está en response.data
+            if (response.data) {
                 await sock.sendMessage(from, { 
-                    image: { url: finalImageUrl }, 
+                    image: Buffer.from(response.data), 
                     caption: '✅ *Calidad mejorada exitosamente.*',
                     mimetype: 'image/jpeg' 
                 }, { quoted: m });
             } else {
-                console.log("Respuesta de la API:", data);
-                throw new Error('La API no devolvió una URL de imagen válida.');
+                throw new Error('No se recibió contenido de imagen.');
             }
 
         } catch (err) {
             console.error("ERROR EN HD:", err);
             
-            // Capturar el mensaje de error exacto de la API si existe
-            let msg = err.message;
+            let msg = "Error al procesar la imagen.";
             if (err.response && err.response.data) {
-                msg = err.response.data.message || JSON.stringify(err.response.data);
+                // Si falló y mandó un JSON de error en vez de la imagen
+                try {
+                    const errorJson = JSON.parse(err.response.data.toString());
+                    msg = errorJson.message || msg;
+                } catch (e) {
+                    msg = "La API está saturada o el archivo es muy pesado.";
+                }
             }
             
             sock.sendMessage(from, { text: `❌ Error: ${msg}` }, { quoted: m });
