@@ -20,11 +20,11 @@ export default {
         // Reacción de espera
         await sock.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-        try {
-            const key = "sasuke"; // Key directa para CHARLY-BOT
+try {
+            const key = "sasuke"; 
             let endpoint = '';
 
-            // Selección de endpoint según el comando usado
+            // Usamos un Switch o Ifs más claros para evitar el string vacío
             if (/ig|instagram/i.test(command)) {
                 endpoint = `https://api.evogb.org/dl/instagram?url=${encodeURIComponent(query)}&key=${key}`;
             } else if (/fb|facebook/i.test(command)) {
@@ -33,6 +33,12 @@ export default {
                 endpoint = `https://api.evogb.org/dl/tiktok?url=${encodeURIComponent(query)}&key=${key}`;
             }
 
+            // VALIDACIÓN CRÍTICA: Si el endpoint sigue vacío, no disparamos Axios
+            if (!endpoint) {
+                return sock.sendMessage(from, { text: '⚠️ Comando no reconocido para esta descarga.' }, { quoted: m });
+            }
+
+            // Ahora sí hacemos la petición
             const { data } = await axios.get(endpoint);
             
             if (!data.status) {
