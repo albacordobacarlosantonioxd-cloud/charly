@@ -4,68 +4,57 @@ export default {
     name: "ytvideo",
     category: 'descargas',
     aliases: ["video", "playvideo"],
-    run: async (sock, m, from, text) => {
+    run: async (sock, m, from, text, command) => {
         const dev = "𝘽𝙮 𝘾𝙝𝙖𝙧𝙡𝙮";
         const chn = "𝘾𝙃𝘼𝙍𝙇𝙔-𝘽𝙊𝙏";
         const key = "sasuke";
 
         if (!text) {
             return sock.sendMessage(from, { 
-                text: `*🏮 [ CHARLY-BOT VIDEO ]*\n\n*Escribe el nombre de lo que buscas para descargar el video.*\n*Ejemplo:* .ytvideo Noche Perfecta Fuerza Regida` 
+                text: `*🏮 [ CHARLY-BOT VIDEO ]*\n\n*Escribe el nombre o link del video.*\n*Ejemplo:* .video Noche Perfecta` 
             }, { quoted: m });
         }
 
-        // Reacción de procesamiento
         await sock.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
         try {
-            // Basado en el endpoint de tu captura: api.evogb.org
             const apiUrl = `https://api.evogb.org/dl/youtubeplay?query=${encodeURIComponent(text)}&type=video&quality=720&key=${key}`;
             const { data } = await axios.get(apiUrl);
 
             if (!data.status || !data.data) {
                 await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
-                return sock.sendMessage(from, { text: '⚠️ No se encontró el video en los servidores.' }, { quoted: m });
+                return sock.sendMessage(from, { text: '⚠️ No se encontró el video.' }, { quoted: m });
             }
 
             const yt = data.data;
-            
-            // Interfaz de información del video
-            let info = `┏━━━━━━━━━━━━━━━━━━┓\n`;
-            info += `┃   🎥 *YOUTUBE VIDEO* 🎥\n`;
-            info += `┣━━━━━━━━━━━━━━━━━━┛\n`;
-            info += `┃\n`;
-            info += `┃ 📝 *Tíᴛᴜʟᴏ:* ${yt.title}\n`;
-            info += `┃ 🕒 *Dᴜʀᴀᴄɪóɴ:* ${yt.duration.timestamp}\n`;
-            info += `┃ 👁️ *Vɪsᴛᴀs:* ${yt.views}\n`;
-            info += `┃ 👤 *Cᴀɴᴀʟ:* ${yt.author.name}\n`;
-            info += `┃\n`;
-            info += `┣━━━━━━━━━━━━━━━━━━┓\n`;
-            info += `┃ ⚡ *${dev}*\n`;
-            info += `┃ 📡 *${chn}*\n`;
-            info += `┗━━━━━━━━━━━━━━━━━━┛\n\n`;
-            info += `🚀 *Enviando archivo MP4...*`;
+            const videoUrl = yt.download.url;
 
-            // 1. Enviamos la miniatura con los detalles técnicos
+            // --- MEJORA: DESCARGA A BUFFER PARA EVITAR ERRORES DE REPRODUCCIÓN ---
+            const response = await axios.get(videoUrl, { responseType: 'arraybuffer' });
+            const videoBuffer = Buffer.from(response.data, 'utf-8');
+
+            let info = `┏━━━━━━━━━━━━━━━━━━┓\n┃   🎥 *YOUTUBE VIDEO* 🎥\n┣━━━━━━━━━━━━━━━━━━┛\n┃\n┃ 📝 *Tíᴛᴜʟᴏ:* ${yt.title}\n┃ 🕒 *Dᴜʀᴀᴄɪóɴ:* ${yt.duration.timestamp}\n┃ ⚖️ *Pᴇsᴏ:* ${yt.quality_contex}\n┃\n┣━━━━━━━━━━━━━━━━━━┓\n┃ ⚡ *${dev}*\n┃ 📡 *${chn}*\n┗━━━━━━━━━━━━━━━━━━┛`;
+
+            // Enviar info con miniatura
             await sock.sendMessage(from, { 
                 image: { url: yt.image }, 
                 caption: info 
             }, { quoted: m });
 
-            // 2. Enviamos el video (Streaming directo desde la API a WhatsApp)
+            // Enviar el video desde el Buffer (esto asegura que el archivo llegue íntegro)
             await sock.sendMessage(from, { 
-                video: { url: yt.download.url }, 
-                caption: `✅ *Resultado:* ${yt.title}`,
+                video: videoBuffer, 
+                caption: `✅ *Descarga Exitosa*`,
                 mimetype: 'video/mp4',
-                fileName: yt.download.filename
+                fileName: `${yt.title}.mp4`
             }, { quoted: m });
 
             await sock.sendMessage(from, { react: { text: '✅', key: m.key } });
 
         } catch (error) {
-            console.error("Error en YouTube Video:", error);
+            console.error("Error en YouTube Video Buffer:", error);
             await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
-            sock.sendMessage(from, { text: '🛑 Error al procesar el video en CHARLY-BOT.' }, { quoted: m });
+            sock.sendMessage(from, { text: '🛑 El archivo es muy pesado o la API falló. Intenta con un video más corto.' }, { quoted: m });
         }
     }
 };
