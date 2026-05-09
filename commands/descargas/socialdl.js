@@ -3,79 +3,66 @@ import axios from 'axios';
 export default {
     name: "socialdl",
     category: 'descargas',
+    // Asegúrate de que estos alias coincidan con los que usas en el menú
     aliases: ["ig", "instagram", "fb", "facebook", "tk", "tiktok"],
     run: async (sock, m, from, text, command) => {
         const dev = "𝘽𝙮 𝘾𝙝𝙖𝙧𝙡𝙮";
         const chn = "𝘾𝙃𝘼𝙍𝙇𝙔-𝘽𝙊𝙏";
         
-        // Usamos la query del texto o de un mensaje citado
+        // Limpiamos el comando de cualquier punto o espacio extra
+        const cmd = command.replace('.', '').toLowerCase();
+        
         let query = text ? text.trim() : (m.quoted?.text || null);
         
         if (!query) {
             return sock.sendMessage(from, { 
-                text: `✨ *Ingresa un enlace para descargar*\n\n> *Ejemplo:* .${command} https://www.instagram.com/reel/...` 
+                text: `✨ *Ingresa un enlace para descargar*\n\n> *Ejemplo:* .${cmd} https://www.instagram.com/reel/...` 
             }, { quoted: m });
         }
 
-        // Reacción de espera
         await sock.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-try {
+        try {
             const key = "sasuke"; 
             let endpoint = '';
 
-            // Usamos un Switch o Ifs más claros para evitar el string vacío
-            if (/ig|instagram/i.test(command)) {
+            // Usamos la variable 'cmd' que ya está limpia
+            if (cmd === 'ig' || cmd === 'instagram') {
                 endpoint = `https://api.evogb.org/dl/instagram?url=${encodeURIComponent(query)}&key=${key}`;
-            } else if (/fb|facebook/i.test(command)) {
+            } else if (cmd === 'fb' || cmd === 'facebook') {
                 endpoint = `https://api.evogb.org/dl/facebook?url=${encodeURIComponent(query)}&key=${key}`;
-            } else if (/tk|tiktok/i.test(command)) {
+            } else if (cmd === 'tk' || cmd === 'tiktok') {
                 endpoint = `https://api.evogb.org/dl/tiktok?url=${encodeURIComponent(query)}&key=${key}`;
             }
 
-            // VALIDACIÓN CRÍTICA: Si el endpoint sigue vacío, no disparamos Axios
+            // Si por alguna razón el endpoint sigue vacío
             if (!endpoint) {
-                return sock.sendMessage(from, { text: '⚠️ Comando no reconocido para esta descarga.' }, { quoted: m });
+                await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
+                return sock.sendMessage(from, { text: `⚠️ El comando *${cmd}* no está configurado correctamente en el sistema.` }, { quoted: m });
             }
 
-            // Ahora sí hacemos la petición
             const { data } = await axios.get(endpoint);
             
             if (!data.status) {
-                await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
-                return sock.sendMessage(from, { text: '⚠️ *La API no devolvió un resultado válido.*' }, { quoted: m });
+                throw new Error("API Status False");
             }
 
             let downloadUrl = '';
             let title = 'Archivo Multimedia';
 
-            // Extracción de datos según la red social
-            if (/ig|instagram/i.test(command)) {
+            if (cmd === 'ig' || cmd === 'instagram') {
                 downloadUrl = data.data[0].url;
                 title = 'Instagram Reel';
-            } else if (/fb|facebook/i.test(command)) {
+            } else if (cmd === 'fb' || cmd === 'facebook') {
                 downloadUrl = data.resultados[0].url;
                 title = 'Facebook Video';
-            } else if (/tk|tiktok/i.test(command)) {
+            } else if (cmd === 'tk' || cmd === 'tiktok') {
                 downloadUrl = data.data.dl;
                 title = data.data.title || 'TikTok Video';
             }
 
-            if (!downloadUrl) {
-                throw new Error("No se encontró URL de descarga");
-            }
+            let ui = `┏━━━━━━━━━━━━━━━━┓\n┃   📥 *DESCARGADOR* ┃\n┗━━━━━━━━━━━━━━━━┛\n\n📝 *INFO:* ${title}\n⚡ *${dev}*\n🌐 *${chn}*`;
 
-            // Interfaz de usuario (UI) adaptada
-            let ui = `┏━━━━━━━━━━━━━━━━┓\n`;
-            ui += `┃   📥 *DESCARGADOR* ┃\n`;
-            ui += `┗━━━━━━━━━━━━━━━━┛\n\n`;
-            ui += `📝 *INFO:* ${title}\n`;
-            ui += `🔗 *ORIGEN:* ${command.toUpperCase()}\n\n`;
-            ui += `━━━━━━━━━━━━━━━━━━━━\n`;
-            ui += `⚡ *${dev}*\n`;
-            ui += `🌐 *${chn}*`;
-
-            // Envío del video
             await sock.sendMessage(from, { 
                 video: { url: downloadUrl }, 
                 caption: ui,
@@ -87,7 +74,7 @@ try {
         } catch (e) {
             console.error("Error en SocialDL:", e);
             await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
-            sock.sendMessage(from, { text: '⚠️ *Ocurrió un error al procesar el video. Verifica el enlace.*' }, { quoted: m });
+            sock.sendMessage(from, { text: '⚠️ *Error:* No se pudo obtener el video. Revisa que el enlace sea público.' }, { quoted: m });
         }
     }
 };
