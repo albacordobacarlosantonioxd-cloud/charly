@@ -1,4 +1,5 @@
 import axios from 'axios';
+import yts from 'yt-search';
 
 export default {
     name: "ytvideo",
@@ -11,43 +12,55 @@ export default {
 
         if (!text) {
             return sock.sendMessage(from, { 
-                text: `*🏮 [ CHARLY-BOT VIDEO ]*\n\n*Escribe el nombre o link del video.*` 
+                text: `*🏮 [ CHARLY-BOT VIDEO ]*\n\n*Escribe el nombre del video.*\n*Ejemplo:* .video Noche Perfecta` 
             }, { quoted: m });
         }
 
         await sock.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
         try {
-            const apiUrl = `https://api.evogb.org/dl/youtubeplay?query=${encodeURIComponent(text)}&type=video&quality=720&key=${key}`;
-            const { data } = await axios.get(apiUrl);
+            // 1. PASO: BÚSQUEDA CON YT-SEARCH
+            const search = await yts(text);
+            const video = search.all[0]; // Tomamos el primer resultado
 
-            if (!data.status || !data.data) {
+            if (!video) {
                 await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
-                return sock.sendMessage(from, { text: '⚠️ No se encontró el video.' }, { quoted: m });
+                return sock.sendMessage(from, { text: '⚠️ No se encontraron resultados.' }, { quoted: m });
             }
 
-            const yt = data.data;
-            const videoUrl = yt.download.url;
+            const videoUrl = video.url;
+            
+            // 2. PASO: ENVIAR INFO E IMAGEN PROCESADA
+            let info = `┏━━━━━━━━━━━━━━━━━━┓\n┃   🎥 *YOUTUBE VIDEO* 🎥\n┣━━━━━━━━━━━━━━━━━━┛\n┃\n┃ 📝 *Tíᴛᴜʟᴏ:* ${video.title}\n┃ 🕒 *Dᴜʀᴀᴄɪóɴ:* ${video.timestamp}\n┃ 👁️ *Vɪsᴛᴀs:* ${video.views}\n┃ 🔗 *Lɪɴᴋ:* ${videoUrl}\n┃\n┣━━━━━━━━━━━━━━━━━━┓\n┃ ⚡ *${dev}*\n┃ 📡 *${chn}*\n┗━━━━━━━━━━━━━━━━━━┛\n\n> 📥 *Descargando video en 720p...*`;
 
-            // 1. Enviamos la info con miniatura
-            let info = `┏━━━━━━━━━━━━━━━━━━┓\n┃   🎥 *YOUTUBE VIDEO* 🎥\n┣━━━━━━━━━━━━━━━━━━┛\n┃ 📝 *Tíᴛᴜʟᴏ:* ${yt.title}\n┃ ⚖️ *Pᴇsᴏ:* ${yt.quality_contex}\n┗━━━━━━━━━━━━━━━━━━┛\n\n> 🚀 *Procesando envío seguro...*`;
-            await sock.sendMessage(from, { image: { url: yt.image }, caption: info }, { quoted: m });
-
-            // 2. ENVÍO DIRECTO (Sin Buffer pesado para no quemar el Giga de RAM)
-            // Esto hace que WhatsApp lo reciba como un video nativo compatible
             await sock.sendMessage(from, { 
-                video: { url: videoUrl }, 
-                caption: `✅ *Resultado:* ${yt.title}`,
-                mimetype: 'video/mp4',
-                fileName: `${yt.title}.mp4`
+                image: { url: video.thumbnail }, 
+                caption: info 
+            }, { quoted: m });
+
+            // 3. PASO: PETICIÓN AL ENDPOINT DE LA IMAGEN (api.evogb.org/dl/ytmp4)
+            const dlApi = `https://api.evogb.org/dl/ytmp4?url=${encodeURIComponent(videoUrl)}&quality=720p&key=${key}`;
+            const { data } = await axios.get(dlApi);
+
+            if (!data.status || !data.data) {
+                throw new Error("Error en el endpoint de descarga");
+            }
+
+            const downloadLink = data.data.url;
+
+            // 4. PASO: ENVÍO DEL VIDEO
+            await sock.sendMessage(from, { 
+                video: { url: downloadLink }, 
+                caption: `✅ *Descarga Completa:* ${video.title}`,
+                mimetype: 'video/mp4'
             }, { quoted: m });
 
             await sock.sendMessage(from, { react: { text: '✅', key: m.key } });
 
         } catch (error) {
-            console.error("Error en YouTube Video compatible:", error.message);
+            console.error("Error en proceso YT Search + DL:", error);
             await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
-            sock.sendMessage(from, { text: '🛑 Hubo un error de compatibilidad. Intenta de nuevo.' }, { quoted: m });
+            sock.sendMessage(from, { text: '🛑 Hubo un fallo al procesar la descarga. Intenta con un link directo.' }, { quoted: m });
         }
     }
 };
