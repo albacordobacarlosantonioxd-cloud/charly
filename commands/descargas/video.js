@@ -11,7 +11,7 @@ export default {
 
         if (!text) {
             return sock.sendMessage(from, { 
-                text: `*🏮 [ CHARLY-BOT VIDEO ]*\n\n*Escribe el nombre o link del video.*\n*Ejemplo:* .video Noche Perfecta` 
+                text: `*🏮 [ CHARLY-BOT VIDEO ]*\n\n*Escribe el nombre o link del video.*` 
             }, { quoted: m });
         }
 
@@ -27,39 +27,27 @@ export default {
             }
 
             const yt = data.data;
-            
-            // Enviamos la info primero
-            let info = `┏━━━━━━━━━━━━━━━━━━┓\n┃   🎥 *YOUTUBE VIDEO* 🎥\n┣━━━━━━━━━━━━━━━━━━┛\n┃\n┃ 📝 *Tíᴛᴜʟᴏ:* ${yt.title}\n┃ 🕒 *Dᴜʀᴀᴄɪóɴ:* ${yt.duration.timestamp}\n┃ ⚖️ *Pᴇsᴏ:* ${yt.quality_contex}\n┃\n┣━━━━━━━━━━━━━━━━━━┓\n┃ ⚡ *${dev}*\n┃ 📡 *${chn}*\n┗━━━━━━━━━━━━━━━━━━┛\n\n> 📥 *Enviando como documento para evitar errores de reproducción...*`;
+            const videoUrl = yt.download.url;
 
+            // 1. Enviamos la info con miniatura
+            let info = `┏━━━━━━━━━━━━━━━━━━┓\n┃   🎥 *YOUTUBE VIDEO* 🎥\n┣━━━━━━━━━━━━━━━━━━┛\n┃ 📝 *Tíᴛᴜʟᴏ:* ${yt.title}\n┃ ⚖️ *Pᴇsᴏ:* ${yt.quality_contex}\n┗━━━━━━━━━━━━━━━━━━┛\n\n> 🚀 *Procesando envío seguro...*`;
             await sock.sendMessage(from, { image: { url: yt.image }, caption: info }, { quoted: m });
 
-            // Descargamos el video (respetando tu límite de 1GB de RAM en Railway)
-            const response = await axios({
-                method: 'get',
-                url: yt.download.url,
-                responseType: 'arraybuffer',
-                maxContentLength: 700 * 1024 * 1024 // Límite de 700MB para seguridad
-            });
-
-            const videoBuffer = Buffer.from(response.data);
-
-            // ENVIAR COMO DOCUMENTO (Esto soluciona el "No disponible")
+            // 2. ENVÍO DIRECTO (Sin Buffer pesado para no quemar el Giga de RAM)
+            // Esto hace que WhatsApp lo reciba como un video nativo compatible
             await sock.sendMessage(from, { 
-                document: videoBuffer, 
+                video: { url: videoUrl }, 
+                caption: `✅ *Resultado:* ${yt.title}`,
                 mimetype: 'video/mp4',
-                fileName: `${yt.title}.mp4`,
-                caption: `✅ *${yt.title}*\n\n*Nota:* Al enviarse como documento, descárgalo para verlo sin errores.`
+                fileName: `${yt.title}.mp4`
             }, { quoted: m });
-
-            // Limpieza inmediata de memoria para el Giga de Railway
-            response.data = null; 
 
             await sock.sendMessage(from, { react: { text: '✅', key: m.key } });
 
         } catch (error) {
-            console.error("Error en YouTube Video Documento:", error);
+            console.error("Error en YouTube Video compatible:", error.message);
             await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
-            sock.sendMessage(from, { text: '🛑 El video es demasiado pesado o hubo un fallo en la red.' }, { quoted: m });
+            sock.sendMessage(from, { text: '🛑 Hubo un error de compatibilidad. Intenta de nuevo.' }, { quoted: m });
         }
     }
 };
