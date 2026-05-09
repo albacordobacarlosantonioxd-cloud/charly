@@ -7,34 +7,51 @@ export default {
     aliases: ["video"],
     run: async (sock, m, from, text, command) => {
         const key = "sasuke";
+        const dev = "𝘽𝙮 𝘾𝙝𝙖𝙧𝙡𝙮";
 
         if (!text) return sock.sendMessage(from, { text: `*Escribe el nombre del video.*` }, { quoted: m });
 
         await sock.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
         try {
+            // 1. Buscamos el video
             const search = await yts(text);
             const video = search.all[0];
             if (!video) return sock.sendMessage(from, { text: '⚠️ No se encontró.' });
 
-            // CAMBIO CLAVE: Usamos calidad 360p para evitar el error de reproducción
+            // 2. Pedimos el link a la API (usando el endpoint de tu imagen)
             const dlApi = `https://api.evogb.org/dl/ytmp4?url=${encodeURIComponent(video.url)}&quality=360p&key=${key}`;
             const { data } = await axios.get(dlApi);
 
             if (!data.status) throw new Error("API error");
 
-            // MANDAR COMO VIDEO NATIVO (Sin Buffer para ahorrar tu Giga de RAM)
+            // 3. DESCARGA A BUFFER (Solución para el error de reproducción)
+            const response = await axios({
+                method: 'get',
+                url: data.data.url,
+                responseType: 'arraybuffer',
+                headers: { 'User-Agent': 'Mozilla/5.0' }
+            });
+
+            const videoBuffer = Buffer.from(response.data);
+
+            // 4. Enviar como video real
             await sock.sendMessage(from, { 
-                video: { url: data.data.url }, 
-                caption: `✅ *${video.title}*`,
-                mimetype: 'video/mp4' // Forzamos el tipo de archivo
+                video: videoBuffer, 
+                caption: `✅ *${video.title}*\n⚡ *${dev}*`,
+                mimetype: 'video/mp4',
+                fileName: `${video.title}.mp4`
             }, { quoted: m });
+
+            // Limpieza manual para cuidar tu Giga de RAM
+            response.data = null;
 
             await sock.sendMessage(from, { react: { text: '✅', key: m.key } });
 
         } catch (error) {
+            console.error(error);
             await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
-            sock.sendMessage(from, { text: '🛑 Error de servidor. Intenta con otro video.' });
+            sock.sendMessage(from, { text: '🛑 Error: El archivo no es compatible o el servidor falló.' });
         }
     }
 };
