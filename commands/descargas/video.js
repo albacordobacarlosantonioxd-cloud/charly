@@ -4,63 +4,37 @@ import yts from 'yt-search';
 export default {
     name: "ytvideo",
     category: 'descargas',
-    aliases: ["video", "playvideo"],
+    aliases: ["video"],
     run: async (sock, m, from, text, command) => {
-        const dev = "𝘽𝙮 𝘾𝙝𝙖𝙧𝙡𝙮";
-        const chn = "𝘾𝙃𝘼𝙍𝙇𝙔-𝘽𝙊𝙏";
         const key = "sasuke";
 
-        if (!text) {
-            return sock.sendMessage(from, { 
-                text: `*🏮 [ CHARLY-BOT VIDEO ]*\n\n*Escribe el nombre del video.*\n*Ejemplo:* .video Noche Perfecta` 
-            }, { quoted: m });
-        }
+        if (!text) return sock.sendMessage(from, { text: `*Escribe el nombre del video.*` }, { quoted: m });
 
         await sock.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
         try {
-            // 1. PASO: BÚSQUEDA CON YT-SEARCH
             const search = await yts(text);
-            const video = search.all[0]; // Tomamos el primer resultado
+            const video = search.all[0];
+            if (!video) return sock.sendMessage(from, { text: '⚠️ No se encontró.' });
 
-            if (!video) {
-                await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
-                return sock.sendMessage(from, { text: '⚠️ No se encontraron resultados.' }, { quoted: m });
-            }
-
-            const videoUrl = video.url;
-            
-            // 2. PASO: ENVIAR INFO E IMAGEN PROCESADA
-            let info = `┏━━━━━━━━━━━━━━━━━━┓\n┃   🎥 *YOUTUBE VIDEO* 🎥\n┣━━━━━━━━━━━━━━━━━━┛\n┃\n┃ 📝 *Tíᴛᴜʟᴏ:* ${video.title}\n┃ 🕒 *Dᴜʀᴀᴄɪóɴ:* ${video.timestamp}\n┃ 👁️ *Vɪsᴛᴀs:* ${video.views}\n┃ 🔗 *Lɪɴᴋ:* ${videoUrl}\n┃\n┣━━━━━━━━━━━━━━━━━━┓\n┃ ⚡ *${dev}*\n┃ 📡 *${chn}*\n┗━━━━━━━━━━━━━━━━━━┛\n\n> 📥 *Descargando video en 720p...*`;
-
-            await sock.sendMessage(from, { 
-                image: { url: video.thumbnail }, 
-                caption: info 
-            }, { quoted: m });
-
-            // 3. PASO: PETICIÓN AL ENDPOINT DE LA IMAGEN (api.evogb.org/dl/ytmp4)
-            const dlApi = `https://api.evogb.org/dl/ytmp4?url=${encodeURIComponent(videoUrl)}&quality=720p&key=${key}`;
+            // CAMBIO CLAVE: Usamos calidad 360p para evitar el error de reproducción
+            const dlApi = `https://api.evogb.org/dl/ytmp4?url=${encodeURIComponent(video.url)}&quality=360p&key=${key}`;
             const { data } = await axios.get(dlApi);
 
-            if (!data.status || !data.data) {
-                throw new Error("Error en el endpoint de descarga");
-            }
+            if (!data.status) throw new Error("API error");
 
-            const downloadLink = data.data.url;
-
-            // 4. PASO: ENVÍO DEL VIDEO
+            // MANDAR COMO VIDEO NATIVO (Sin Buffer para ahorrar tu Giga de RAM)
             await sock.sendMessage(from, { 
-                video: { url: downloadLink }, 
-                caption: `✅ *Descarga Completa:* ${video.title}`,
-                mimetype: 'video/mp4'
+                video: { url: data.data.url }, 
+                caption: `✅ *${video.title}*`,
+                mimetype: 'video/mp4' // Forzamos el tipo de archivo
             }, { quoted: m });
 
             await sock.sendMessage(from, { react: { text: '✅', key: m.key } });
 
         } catch (error) {
-            console.error("Error en proceso YT Search + DL:", error);
             await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
-            sock.sendMessage(from, { text: '🛑 Hubo un fallo al procesar la descarga. Intenta con un link directo.' }, { quoted: m });
+            sock.sendMessage(from, { text: '🛑 Error de servidor. Intenta con otro video.' });
         }
     }
 };
