@@ -203,8 +203,9 @@ async function startBot() {
             }
         }
 
-        try {
-            await cmd.run(sock, m, from, text, m.message.extendedTextMessage?.contextInfo?.quotedMessage, args, isAdmin, isGroup, normalizedSender);
+try {
+            // Se cambió el quinto parámetro de 'm.message...' a 'commandName'
+            await cmd.run(sock, m, from, text, commandName, args, isAdmin, isGroup, normalizedSender);
         } catch (e) {
             console.error(`Error en comando ${commandName}:`, e);
         }
