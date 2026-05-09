@@ -1,89 +1,71 @@
-import axios from "axios";
-import FormData from "form-data";
-import { downloadContentFromMessage } from "@whiskeysockets/baileys";
+import fetch from "node-fetch";
 
 export default {
     name: "nanobanana",
     category: 'ia',
-    aliases: ["nb"],
-    run: async (sock, m, from, text, quoted, args) => {
-        const q = m.quoted ? m.quoted.message : m.message;
-        const imageMsg = q.imageMessage || q.viewOnceMessage?.message?.imageMessage || q.viewOnceMessageV2?.message?.imageMessage;
+    aliases: ["iaimg", "genimg", "imagine"],
+    run: async (sock, m, from, text) => {
+        const dev = "𝘽𝙮 𝘾𝙝𝙖𝙧𝙡𝙮";
+        const chn = "𝘾𝙃𝘼𝙍𝙇𝙔-𝘽𝙊𝙏"; // <--- Actualizado
+        
+        // Key oficial de la API de EvoGB
+        const key = "sasuke"; 
 
-        if (!imageMsg) return sock.sendMessage(from, { text: "Responde a una imagen, Carlos." });
-        if (!text) return sock.sendMessage(from, { text: "Dime qué cambio le hago a la imagen." });
+        if (!text) {
+            return sock.sendMessage(from, { 
+                text: `*🏮 [ SISTEMA CHARLY-BOT ]*\n\n*Escribe el prompt para generar la imagen.*\n*Ejemplo:* .nanobanana una Yamaha MT-09 modificada color negro mate` 
+            }, { quoted: m });
+        }
+
+        // Reacción de procesamiento (ADN/Carga)
+        await sock.sendMessage(from, { react: { text: '🧬', key: m.key } });
 
         try {
-            const key = "sasuke";
-
-            // 1. Descargar imagen de WhatsApp
-            console.log("--- STEP 1: Descargando imagen de WA ---");
-            const stream = await downloadContentFromMessage(imageMsg, 'image');
-            let buffer = Buffer.from([]);
-            for await (const chunk of stream) {
-                buffer = Buffer.concat([buffer, chunk]);
-            }
-
-            // 2. Subir a Uploader
-            console.log("--- STEP 2: Subiendo a Evogb Uploader ---");
-            const form = new FormData();
-            form.append('file', buffer, { filename: 'image.jpg' });
+            const apiUrl = `https://api.evogb.org/ai/nanobanana?prompt=${encodeURIComponent(text)}&key=${key}`;
+            let res = await fetch(apiUrl);
             
-            const uploadRes = await axios.post('https://api.evogb.org/tools/upload', form, {
-                headers: { ...form.getHeaders() }
-            });
-            
-            const directUrl = uploadRes.data.result || uploadRes.data.url;
-            console.log("🔗 Enlace generado:", directUrl);
+            if (!res.ok) throw new Error("Error en la API");
 
-            if (!directUrl) {
-                console.error("❌ Falló el uploader, respuesta:", uploadRes.data);
-                return sock.sendMessage(from, { text: "No se pudo subir la imagen al servidor temporal." });
+            const contentType = res.headers.get('content-type');
+            let imageUrl;
+
+            // Manejo dinámico de respuesta (JSON o URL directa)
+            if (contentType && contentType.includes('application/json')) {
+                let json = await res.json();
+                imageUrl = json.result;
+            } else {
+                imageUrl = res.url; 
             }
 
-            // 3. Petición a Nano Banana
-            console.log("--- STEP 3: Procesando con Nano Banana IA ---");
-            const response = await axios.get('https://api.evogb.org/ai/nanobanana', {
-                params: {
-                    prompt: text,
-                    url: directUrl,
-                    key: key
-                },
-                timeout: 90000 // Aumentamos a 90 seg para Railway
-            });
+            // Diseño de la interfaz del mensaje
+            let txt = `┏━━━━━━━━━━━━━━━━━━┓\n`;
+            txt += `┃  🏮  *CHARLY-BOT VISION* 🏮\n`;
+            txt += `┣━━━━━━━━━━━━━━━━━━┛\n`;
+            txt += `┃\n`;
+            txt += `┃ 📝 *Dᴇsᴄʀɪᴘᴄɪᴏ́ɴ:* \n`;
+            txt += `┃ » _${text}_ \n`;
+            txt += `┃\n`;
+            txt += `┃ ⚙️ *Esᴛᴀᴅᴏ:* 🟢 Finalizado\n`;
+            txt += `┃ 🧪 *Mᴏᴅᴇʟᴏ:* Nanobanana v3\n`;
+            txt += `┃\n`;
+            txt += `┣━━━━━━━━━━━━━━━━━━┓\n`;
+            txt += `┃ ⚡ *${dev}*\n`;
+            txt += `┃ 📡 *${chn}*\n`;
+            txt += `┗━━━━━━━━━━━━━━━━━━┛`;
 
-            console.log("--- STEP 4: Respuesta de IA recibida ---");
-            const imagenResultado = response.data.result || response.data.url;
-
-            if (!imagenResultado) {
-                console.error("❌ La IA no devolvió URL. Respuesta:", response.data);
-                return sock.sendMessage(from, { text: "La IA no devolvió imagen (Posible error interno de la API)." });
-            }
-
+            // Enviamos el resultado al chat
             await sock.sendMessage(from, { 
-                image: { url: imagenResultado },
-                caption: "✅ ¡Listo! Aquí tienes tu imagen editada."
+                image: { url: imageUrl }, 
+                caption: txt 
             }, { quoted: m });
 
-        } catch (e) {
-            console.error("--- ERROR NANOBANANA DETALLADO ---");
-            if (e.response) {
-                // El servidor respondió con error (ej. 500, 403, 404)
-                console.error("Fase: Petición HTTP");
-                console.error("Status:", e.response.status);
-                console.error("Data:", e.response.data);
-                
-                let msgError = e.response.status === 500 
-                    ? "Error 500: El servidor de Evo colapsó procesando la imagen." 
-                    : `Error de API: ${e.response.status}`;
-                await sock.sendMessage(from, { text: msgError });
-            } else if (e.code === 'ECONNABORTED') {
-                console.error("Error: Tiempo de espera agotado (Timeout)");
-                await sock.sendMessage(from, { text: "La IA tardó demasiado en responder. Reintenta en un momento." });
-            } else {
-                console.error("Mensaje:", e.message);
-                await sock.sendMessage(from, { text: `Error inesperado: ${e.message}` });
-            }
+            // Reacción de éxito
+            await sock.sendMessage(from, { react: { text: '✨', key: m.key } });
+
+        } catch (error) {
+            console.error("Error en Nanobanana:", error);
+            await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
+            sock.sendMessage(from, { text: '🛑 *Error:* No se pudo renderizar la imagen en CHARLY-BOT.' }, { quoted: m });
         }
     }
 };

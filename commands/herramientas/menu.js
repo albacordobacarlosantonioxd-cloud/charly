@@ -11,142 +11,98 @@ export default {
 《✧》 *INTELIGENCIA ARTIFICIAL*
 
 ◈ .chatgpt / .gpt / .gpt4
-> Consulta a la última versión de ChatGPT para respuestas rápidas.
+> Consulta a la última versión de ChatGPT.
 
 ◈ .claude / .clau
-> IA avanzada ideal para programación y análisis de texto extenso.[cite: 1]
+> IA avanzada ideal para programación y análisis.
 
 ◈ .gemini / .gemi / .google
-> Habla directamente con la IA de Google Gemini.[cite: 1]
+> Habla directamente con la IA de Google Gemini.
 
-◈ .copilot / .cop
-> Consulta a la IA de Microsoft para código y tareas técnicas.[cite: 1]
+◈ .nanobanana / .nb / .iaimg
+> Generador de imágenes por IA (Uchiha Vision).
 
-◈ .ia / .bot / .groq / .pregunta
-> Chat general con la inteligencia principal del bot.[cite: 1]
-
-◈ .nanobanana / .nb
-> Generador de imágenes por IA (Nano Banana 2).[cite: 1]
-
-◈ .flux
-> Generador avanzado de imágenes con realismo premium.[cite: 1]
+◈ .realista / .toreal
+> Convierte imágenes de anime a estilo realista.
 
 ◈ .responde / .tarea / .soluciona
-> Resuelve tareas o dudas enviando una foto o video.[cite: 1]
+> Resuelve tareas enviando una foto o video.
 
 《✧》 *MULTIMEDIA & DOWNLOAD*
 
-◈ .audio / .ytaudio
-> Descarga música de YouTube en formato MP3.[cite: 1]
-
 ◈ .video / .ytvideo
-> Descarga videos de YouTube en formato MP4.[cite: 1]
+> Descarga videos de YouTube en formato MP4 (720p).
+
+◈ .apk / .modapk / .dapk
+> Busca y descarga aplicaciones para Android.
+
+◈ .mediafire / .mf
+> Descarga archivos pesados directamente de MediaFire.
 
 ◈ .facebook / .fb / .fbdl
-> Descarga videos de Facebook fácilmente.[cite: 1]
+> Descarga videos de Facebook fácilmente.
 
 ◈ .instagram / .ig / .reels
-> Descarga fotos, videos y Reels de Instagram.[cite: 1]
-
-◈ .spotify / .sp / .sps
-> Descarga tus canciones favoritas de Spotify.[cite: 1]
+> Descarga fotos, videos y Reels de Instagram.
 
 ◈ .tiktok / .tt
-> Descarga videos de TikTok sin marca de agua.[cite: 1]
+> Descarga videos de TikTok sin marca de agua.
 
-◈ .letra / .lyrics / .l
-> Busca la letra completa de cualquier canción.[cite: 1]
+◈ .spotify / .sp / .sps
+> Descarga tus canciones favoritas de Spotify.
 
 《✧》 *BÚSQUEDA & UTILIDAD*
 
-◈ .spotifysearch / .searchsp
-> Busca canciones y obtén links directos de Spotify.[cite: 1]
+◈ .pinterest / .pin
+> Busca y descarga un álbum de imágenes de Pinterest.
 
 ◈ .ytsearch / .yt / .youtube / .buscar
-> Busca videos en YouTube y muestra los mejores resultados.[cite: 1]
+> Busca videos en YouTube y muestra los resultados.
 
-◈ .tts / .audiotexto / .decir
-> Convierte texto a audio o nota de voz.[cite: 1]
+◈ .spotifysearch / .searchsp
+> Busca canciones y obtén links de Spotify.
+
+◈ .letra / .lyrics / .l
+> Busca la letra completa de cualquier canción.
 
 《✧》 *HERRAMIENTAS*
 
-◈ .tempmail / .mail / .generarcorreo
-> Crea un correo electrónico temporal al instante.[cite: 1]
+◈ .pfp / .perfilfoto
+> Obtiene la foto de perfil de un usuario en HD.
 
-◈ .readmail / .leercorreo / .tempread
-> Lee la bandeja de entrada del correo temporal generado.[cite: 1]
-
-◈ .hd
-> Mejora la calidad de una imagen (Upscale x2).[cite: 1]
+◈ .hd / .upscale
+> Mejora la calidad de una imagen (x2).
 
 ◈ .sticker / .s
-> Convierte imágenes o videos en stickers.[cite: 1]
+> Convierte imágenes o videos en stickers.
 
-◈ .brat / .bratv
-> Genera stickers con el diseño estilo "Brat".[cite: 1]
-
-◈ .separate / .vocal / .separe
-> Separa la voz de la pista instrumental de un audio.[cite: 1]
+◈ .tempmail / .mail / .generarcorreo
+> Crea un correo electrónico temporal al instante.
 
 ◈ .ping / .p
-> Muestra la latencia y velocidad del bot.[cite: 1]
-
-◈ .kiss / .hug / .slap
-> Interacciones con GIFs (Besar, abrazar o dar una nalgada).[cite: 1]
-
-《✧》 *PERFIL & RPG*
-
-◈ .profile / .perfil
-> Muestra tu perfil con estadísticas, nivel y dinero.[cite: 1]
-
-◈ .work / .w / .chamba / .chambear
-> Trabaja para ganar dinero (cooldown de 3 minutos).[cite: 1]
-
-◈ .setdesc / .setdescription / .deldesc
-> Gestiona tu descripción personalizada de perfil.[cite: 1]
-
-◈ .setbirth / .setcumple
-> Establece tu fecha de nacimiento en el perfil.[cite: 1]
-
-◈ .setgenre / .setgenero / .delgenre
-> Gestiona tu género en las estadísticas.[cite: 1]
-
-◈ .sethobby / .setpasatiempo / .delhobby
-> Establece o elimina tu pasatiempo favorito.[cite: 1]
-
-◈ .marry / .casarse / .proponer
-> Propón matrimonio a otro usuario del grupo.[cite: 1]
+> Muestra la latencia y velocidad de CHARLY-BOT.
 
 《✧》 *ADMINISTRACIÓN DE GRUPOS*
 
 ◈ .tag
-> Menciona a todos los miembros del grupo (Hidetag).[cite: 1]
+> Menciona a todos los miembros del grupo.
 
 ◈ .kick / .sacar / .eliminar
-> Expulsa a un usuario del grupo (Solo Admins).[cite: 1]
+> Expulsa a un usuario del grupo (Solo Admins).
 
 ◈ .promote / .demote
-> Da o quita el rango de administrador a un usuario.[cite: 1]
-
-◈ .open / .close
-> Abre o cierra el grupo para que todos o solo admins hablen.[cite: 1]
+> Da o quita el rango de administrador.
 
 ◈ .link / .enlace / .invitacion
-> Obtiene el link de invitación del grupo actual.[cite: 1]
+> Obtiene el link de invitación del grupo actual.
 
 ◈ .del / .delete
-> Borra un mensaje respondido (Requiere ser Admin).[cite: 1]
-
-◈ .setgpbanner / .setgroupimg / .setppgc
-> Cambia la imagen o el banner del grupo.[cite: 1]
-
-◈ .setgpdesc / .descgrupo
-> Cambia la descripción del grupo.[cite: 1]
+> Borra un mensaje respondido (Solo Admins).
 
 《✧》 *CONTENIDO +18*
 
 ◈ .nsfwmenu
-> Accede al menú completo de comandos restringidos.[cite: 1]
+> Accede al menú completo de comandos restringidos.
 
 > _Propiedad de Charly - Desarrollado para el Clan HOT ON_`;
 

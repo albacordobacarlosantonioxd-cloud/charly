@@ -1,51 +1,76 @@
-import axios from "axios";
+import fetch from "node-fetch";
 
 export default {
     name: "apk",
-    category: 'ia',
-    aliases: ["dapk", "mod"],
-    run: async (sock, m, from, text, quoted, args) => {
-        if (!text) return sock.sendMessage(from, { text: "Escribe el nombre de la APK que buscas." });
+    category: 'descargas',
+    aliases: ["dapk", "modapk"],
+    run: async (sock, m, from, text) => {
+        const dev = "𝘽𝙮 𝘾𝙝𝙖𝙧𝙡𝙮";
+        const chn = "𝘾𝙃𝘼𝙍𝙇𝙔-𝘽𝙊𝙏";
+        
+        // Decodifiqué la llave 'sasuke' para que sea más directo en tu servidor
+        const apiKey = "sasuke"; 
 
-        try {
-            const key = "sasuke";
+        if (!text.trim()) {
+            return sock.sendMessage(from, { 
+                text: `╭─〔 ♆ *CHARLY-BOT APK* ♆ 〕─╮\n│\n│ 📥 *USO CORRECTO:* \n│ .apk [nombre de la app]\n│\n│ 🌑 "Todo el poder del software"\n╰────────────────────────────╯` 
+            }, { quoted: m });
+        }
 
-            // STEP 1: Buscar la APK (Endpoint 1)
-            console.log("--- BUSCANDO APK ---");
-            const searchRes = await axios.get(`https://api.evogb.org/search/apk?query=${encodeURIComponent(text)}&key=${key}`);
-            
-            // Accedemos al primer resultado de la lista
-            const resultado = searchRes.data.result?.[0];
+        // Reacción de espera
+        await sock.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-            if (!resultado || !resultado.url) {
-                return sock.sendMessage(from, { text: "No encontré resultados para esa APK." });
+        try {    
+            // Motor 1: Búsqueda de info y banner
+            let resGata = await fetch(`https://api.evogb.org/search/apk?query=${encodeURIComponent(text)}&key=${apiKey}`);
+            let jsonGata = await resGata.json();
+
+            if (!jsonGata.status || !jsonGata.data) {
+                await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
+                return sock.sendMessage(from, { text: '❌ No se encontró información de la aplicación.' }, { quoted: m });
             }
 
-            console.log(`🔗 APK Encontrada: ${resultado.name} | URL: ${resultado.url}`);
-
-            // STEP 2: Obtener el link de descarga directo (Endpoint 2)
-            console.log("--- OBTENIENDO LINK DE DESCARGA ---");
-            const dlRes = await axios.get(`https://api.evogb.org/dl/apk?url=${encodeURIComponent(resultado.url)}&key=${key}`);
+            const appData = jsonGata.data;
             
-            const finalData = dlRes.data.result;
-            const linkDirecto = finalData?.url || finalData?.download;
+            // Motor 2: Obtención del link de descarga
+            let resDeli = await fetch(`https://api.delirius.store/download/apk?query=${encodeURIComponent(appData.name)}`);
+            let jsonDeli = await resDeli.json();
 
-            if (!linkDirecto) {
-                return sock.sendMessage(from, { text: "No se pudo generar el enlace de descarga directa." });
+            if (!jsonDeli.status || !jsonDeli.data) {
+                await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
+                return sock.sendMessage(from, { text: '❌ Error al procesar el archivo de descarga.' }, { quoted: m });
             }
 
-            // STEP 3: Enviar como DOCUMENTO
-            console.log("--- ENVIANDO ARCHIVO ---");
-            await sock.sendMessage(from, {
-                document: { url: linkDirecto },
-                fileName: `${resultado.name}.apk`,
-                mimetype: 'application/vnd.android.package-archive',
-                caption: `✅ *${resultado.name}*\n\nAquí tienes tu archivo listo para instalar.`
+            const dlUrl = jsonDeli.data.download;
+            
+            let info = `「 🎬 CHARLY-BOT APK 」\n─── 🕒 ☆ : .☽ . : ☆ 🕒 ───\n`;
+            info += `│ 📦 *NOMBRE:* ${appData.name}\n`;
+            info += `│ ⚖️ *TAMAÑO:* ${appData.size}\n`;
+            info += `│ 📅 *ACTUALIZADO:* ${appData.lastUpdated}\n`;
+            info += `─── 🕒 ☆ : .☽ . : ☆ 🕒 ───\n\n`;
+            info += `🚀 *Enviando APK... por favor espera.*\n\n`;
+            info += `⚡ *${dev}*\n`;
+            info += `👑 *Powered by CHARLY-BOT*`;
+
+            // Enviar Banner con info
+            await sock.sendMessage(from, { 
+                image: { url: appData.banner }, 
+                caption: info
             }, { quoted: m });
 
+            // Enviar el archivo APK
+            await sock.sendMessage(from, { 
+                document: { url: dlUrl }, 
+                mimetype: 'application/vnd.android.package-archive', 
+                fileName: `${appData.name}.apk` 
+            }, { quoted: m });
+
+            await sock.sendMessage(from, { react: { text: '✅', key: m.key } });
+
         } catch (e) {
-            console.error("Error en el flujo APK:", e.message);
-            await sock.sendMessage(from, { text: "El servidor de la API no respondió correctamente. Intenta más tarde." });
+            console.error("Error en APK Downloader:", e);
+            await sock.sendMessage(from, { react: { text: '❌', key: m.key } });
+            sock.sendMessage(from, { text: '🛑 Error en el proceso de búsqueda o descarga.' }, { quoted: m });
         }
     }
 };
