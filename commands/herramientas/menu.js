@@ -1,110 +1,51 @@
 export default {
     name: 'menu',
     category: 'herramientas',
-    run: async (sock, m, from, text, quoted) => {
+    run: async (sock, m, from, text, { usedPrefix }) => {
         const imagenMenu = 'https://i.postimg.cc/rsLZrVxy/mi-imagen-del-menu.png'; 
 
         const menuCaption = `❀ *CHARLY-BOT MAESTRO V2* ❀
 
-> ✨ *SISTEMA DE COMANDOS* ✨
+> ✨ *SISTEMA DINÁMICO* ✨
+> *Prefijo:* [ ${usedPrefix} ]
 
 《✧》 *INTELIGENCIA ARTIFICIAL*
-
-◈ .chatgpt / .gpt / .gpt4
-> Consulta a la última versión de ChatGPT.
-
-◈ .claude / .clau
-> IA avanzada ideal para programación y análisis.
-
-◈ .gemini / .gemi / .google
-> Habla directamente con la IA de Google Gemini.
-
-◈ .nanobanana / .nb / .iaimg
-> Generador de imágenes por IA (Uchiha Vision).
-
-◈ .realista / .toreal
-> Convierte imágenes de anime a estilo realista.
-
-◈ .responde / .tarea / .soluciona
-> Resuelve tareas enviando una foto o video.
+◈ ${usedPrefix}gpt4 / ${usedPrefix}claude
+◈ ${usedPrefix}gemini / ${usedPrefix}copilot
+◈ ${usedPrefix}flux / ${usedPrefix}nanobanana
+◈ ${usedPrefix}iarealistic / ${usedPrefix}ia
+◈ ${usedPrefix}vozmujer (🇲🇽 Nuevo)
 
 《✧》 *MULTIMEDIA & DOWNLOAD*
+◈ ${usedPrefix}video / ${usedPrefix}audio
+◈ ${usedPrefix}tiktok / ${usedPrefix}spotify
+◈ ${usedPrefix}mediafire / ${usedPrefix}pinterest
+◈ ${usedPrefix}dezer / ${usedPrefix}socialdl
+◈ ${usedPrefix}apksrh
 
-◈ .video / .ytvideo
-> Descarga videos de YouTube en formato MP4 (720p).
+《✧》 *HERRAMIENTAS & UTILIDAD*
+◈ ${usedPrefix}sticker / ${usedPrefix}hd
+◈ ${usedPrefix}bratt / ${usedPrefix}brattv
+◈ ${usedPrefix}comprimir / ${usedPrefix}pdf
+◈ ${usedPrefix}googleimg / ${usedPrefix}ytsearch
+◈ ${usedPrefix}spotifysearch / ${usedPrefix}letra
+◈ ${usedPrefix}translate / ${usedPrefix}tempmail
+◈ ${usedPrefix}rbg / ${usedPrefix}separate
+◈ ${usedPrefix}pfp / ${usedPrefix}ping
 
-◈ .apk / .modapk / .dapk
-> Busca y descarga aplicaciones para Android.
+《✧》 *ADMINISTRACIÓN (GRUPOS)*
+◈ ${usedPrefix}tag (Mencionar todos)
+◈ ${usedPrefix}kick / ${usedPrefix}promote
+◈ ${usedPrefix}demote / ${usedPrefix}link
+◈ ${usedPrefix}open / ${usedPrefix}close
+◈ ${usedPrefix}del / ${usedPrefix}setgpdesc
 
-◈ .mediafire / .mf
-> Descarga archivos pesados directamente de MediaFire.
+《✧》 *SISTEMA DE PERFIL*
+◈ ${usedPrefix}profile / ${usedPrefix}setbirth
+◈ ${usedPrefix}setdesc / ${usedPrefix}sethobby
+◈ ${usedPrefix}marry / ${usedPrefix}divorciarse
 
-◈ .facebook / .fb / .fbdl
-> Descarga videos de Facebook fácilmente.
-
-◈ .instagram / .ig / .reels
-> Descarga fotos, videos y Reels de Instagram.
-
-◈ .tiktok / .tt
-> Descarga videos de TikTok sin marca de agua.
-
-◈ .spotify / .sp / .sps
-> Descarga tus canciones favoritas de Spotify.
-
-《✧》 *BÚSQUEDA & UTILIDAD*
-
-◈ .pinterest / .pin
-> Busca y descarga un álbum de imágenes de Pinterest.
-
-◈ .ytsearch / .yt / .youtube / .buscar
-> Busca videos en YouTube y muestra los resultados.
-
-◈ .spotifysearch / .searchsp
-> Busca canciones y obtén links de Spotify.
-
-◈ .letra / .lyrics / .l
-> Busca la letra completa de cualquier canción.
-
-《✧》 *HERRAMIENTAS*
-
-◈ .pfp / .perfilfoto
-> Obtiene la foto de perfil de un usuario en HD.
-
-◈ .hd / .upscale
-> Mejora la calidad de una imagen (x2).
-
-◈ .sticker / .s
-> Convierte imágenes o videos en stickers.
-
-◈ .tempmail / .mail / .generarcorreo
-> Crea un correo electrónico temporal al instante.
-
-◈ .ping / .p
-> Muestra la latencia y velocidad de CHARLY-BOT.
-
-《✧》 *ADMINISTRACIÓN DE GRUPOS*
-
-◈ .tag
-> Menciona a todos los miembros del grupo.
-
-◈ .kick / .sacar / .eliminar
-> Expulsa a un usuario del grupo (Solo Admins).
-
-◈ .promote / .demote
-> Da o quita el rango de administrador.
-
-◈ .link / .enlace / .invitacion
-> Obtiene el link de invitación del grupo actual.
-
-◈ .del / .delete
-> Borra un mensaje respondido (Solo Admins).
-
-《✧》 *CONTENIDO +18*
-
-◈ .nsfwmenu
-> Accede al menú completo de comandos restringidos.
-
-> _Propiedad de Charly - Desarrollado para el Clan HOT ON_`;
+> _Propiedad de Charly_`;
 
         try {
             await sock.sendMessage(from, { 
