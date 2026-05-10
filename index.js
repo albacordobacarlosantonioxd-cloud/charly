@@ -106,6 +106,7 @@ const loadCommands = async (dir = "./commands") => {
         }
     }
 };
+
 // --- WHATSAPP CONNECTION ---
 let sock;
 async function startBot() {
@@ -127,7 +128,7 @@ async function startBot() {
             console.log("📱 Escanea el QR con tu WhatsApp:");
             try {
                 await QRCode.toFile("qr-code.png", qr, { scale: 8 });
-                console.log("✅ Imagen QR guardada como: qr-code.png (ábrela y escanéala)");
+                console.log("✅ Imagen QR guardada como: qr-code.png");
             } catch (err) {
                 console.error("❌ Error al guardar el QR:", err.message);
             }
@@ -141,34 +142,30 @@ async function startBot() {
     });
 
     sock.ev.on("messages.upsert", async ({ messages }) => {
-    const m = messages[0];
-    if (!m.message) return;
+        const m = messages[0];
+        if (!m.message) return;
 
-    const from = m.key.remoteJid;
-    const isGroup = from.endsWith("@g.us");
-    
-    // --- MEJORA AQUÍ ---
-    // Extraemos la info del mensaje citado (si existe)
-    const contextInfo = m.message.extendedTextMessage?.contextInfo;
-    if (contextInfo?.quotedMessage) {
-        m.quoted = {
-            sender: contextInfo.participant?.split(':')[0] + '@s.whatsapp.net',
-            message: contextInfo.quotedMessage,
-            key: {
-                remoteJid: from,
-                fromMe: contextInfo.participant === sock.user.id.split(':')[0] + '@s.whatsapp.net',
-                id: contextInfo.stanzaId,
-                participant: contextInfo.participant
-            }
-        };
-    }
-    // -------------------
+        const from = m.key.remoteJid;
+        const isGroup = from.endsWith("@g.us");
+        
+        const contextInfo = m.message.extendedTextMessage?.contextInfo;
+        if (contextInfo?.quotedMessage) {
+            m.quoted = {
+                sender: contextInfo.participant?.split(':')[0] + '@s.whatsapp.net',
+                message: contextInfo.quotedMessage,
+                key: {
+                    remoteJid: from,
+                    fromMe: contextInfo.participant === sock.user.id.split(':')[0] + '@s.whatsapp.net',
+                    id: contextInfo.stanzaId,
+                    participant: contextInfo.participant
+                }
+            };
+        }
 
-    const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "";
-    const sender = m.key.fromMe ? (sock.user.id.split(":")[0] + "@s.whatsapp.net") : (m.key.participant || from);
-    m.sender = sender;
+        const body = m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "";
+        const sender = m.key.fromMe ? (sock.user.id.split(":")[0] + "@s.whatsapp.net") : (m.key.participant || from);
+        m.sender = sender;
 
-        // MIDDLEWARE para antilink
         const antilinkCommand = commands.get("antilink");
         if (antilinkCommand && antilinkCommand.middleware) {
             await antilinkCommand.middleware(sock, m, from, isGroup);
@@ -185,10 +182,8 @@ async function startBot() {
         const cmd = commands.get(commandName);
         if (!cmd) return;
 
-        // --- NORMALIZAR SENDER (quitar :XX del final) ---
         const normalizedSender = sender.split(':')[0] + '@s.whatsapp.net';
 
-        // --- CHEQUEO ADMINS ---
         let isAdmin = false;
         if (isGroup) {
             try {
@@ -203,21 +198,27 @@ async function startBot() {
             }
         }
 
-try {
-            // Se cambió el quinto parámetro de 'm.message...' a 'commandName'
-            await cmd.run(sock, m, from, text, commandName, args, isAdmin, isGroup, normalizedSender);
+        try {
+            const extra = { 
+                usedPrefix: prefix, 
+                command: commandName, 
+                args, 
+                isAdmin, 
+                isGroup, 
+                sender: normalizedSender,
+                commands 
+            };
+            await cmd.run(sock, m, from, text, extra);
         } catch (e) {
             console.error(`Error en comando ${commandName}:`, e);
         }
     });
 }
 
-// Base de datos en RAM para compatibilidad con comandos legacy
 const db = { users: {}, chats: {}, settings: {} };
 
 export { User, Group, Pack, app, commands, sock, db };
 
-// Retrasamos la carga de comandos para evitar dependencias circulares (los comandos importan index.js)
 setImmediate(async () => {
     await loadCommands();
     if (process.env.TEST_MODE !== 'true') {
