@@ -7,24 +7,39 @@ export default {
     help: ['pfp @user', 'pfp <quoted>'],
     description: 'Obtiene la foto de perfil de un usuario.',
     category: 'tools',
-    // Cambiamos "execute" por "run" para que coincida con tu index.js
     async run({ sock, m }) {
-        const target = m.mentions?.[0] || m.quoted?.sender || m.sender
-        
         try {
-            const pp = await sock.profilePictureUrl(target, 'image')
+            // Validamos que 'm' exista para evitar el error de undefined
+            if (!m) return;
+
+            // Blindamos la búsqueda del target
+            const mentions = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+            const quotedSender = m.message?.extendedTextMessage?.contextInfo?.participant || m.message?.extendedTextMessage?.contextInfo?.remoteJid;
             
+            // Prioridad: 1. Mención, 2. Citado, 3. Tú mismo
+            const target = mentions[0] || m.quoted?.sender || quotedSender || m.sender;
+
+            const pp = await sock.profilePictureUrl(target, 'image').catch(_ => null);
+            
+            if (!pp) {
+                return await sock.sendMessage(m.chat, {
+                    text: `❌ No pude obtener la foto de perfil de @${getNumber(target)}. Puede que sea privada o no tenga.`,
+                    mentions: [target]
+                }, { quoted: m });
+            }
+
             return await sock.sendMessage(m.chat, {
                 image: { url: pp },
-                caption: `Foto de perfil de @${getNumber(target)}`,
+                caption: `🏮 Foto de perfil de @${getNumber(target)}`,
                 mentions: [target]
-            }, { quoted: m })
+            }, { quoted: m });
 
         } catch (error) {
-            return await sock.sendMessage(m.chat, {
-                text: `No pude obtener la foto de perfil de @${getNumber(target)}.`,
-                mentions: [target]
-            }, { quoted: m })
+            console.error("Error detallado en PFP:", error);
+            // Si todo falla, al menos que no se crashee el bot
+            if (m && m.chat) {
+                await sock.sendMessage(m.chat, { text: '⚠️ Ocurrió un error inesperado al buscar la foto.' }, { quoted: m });
+            }
         }
     }
 }
