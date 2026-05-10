@@ -1,70 +1,77 @@
-import axios from 'axios';
-import yts from 'yt-search';
-import { exec } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import { promisify } from 'util';
-
-const execPromise = promisify(exec);
+import axios from 'axios'
+import yts from 'yt-search'
 
 export default {
-    name: "ytvideo",
-    category: 'descargas',
-    aliases: ["video"],
-    run: async (sock, m, from, text, command) => {
-        const key = "sasuke";
+    name: "ytmp4",
+    category: 'downloader',
+    aliases: ['video', 'v'],
+    run: async (sock, m, from, text) => {
+        // Buscamos si hay texto o si está citando un mensaje con link/título
+        let query = text ? text.trim() : (m.quoted?.text || null)
         const dev = "𝘽𝙮 𝘾𝙝𝙖𝙧𝙡𝙮";
 
-        if (!text) return sock.sendMessage(from, { text: `*Escribe el nombre del video.*` }, { quoted: m });
+        if (!query) return sock.sendMessage(from, { text: `✨ *¿Qué video deseas descargar?*\n\n> *Ejemplo:* .ytmp4 https://www.youtube.com/watch?v=xxx\n> *O también:* .ytmp4 mt09 black` }, { quoted: m })
 
-        await sock.sendMessage(from, { react: { text: '⏳', key: m.key } });
-
-        const tmpFile = path.join(process.cwd(), `raw_${Date.now()}.mp4`);
-        const outFile = path.join(process.cwd(), `fixed_${Date.now()}.mp4`);
+        await sock.sendMessage(from, { react: { text: '⏳', key: m.key } })
 
         try {
-            // 1. Buscamos con yt-search para tener la info bonita
-            const search = await yts(text);
-            const video = search.all[0];
-            if (!video) return sock.sendMessage(from, { text: '⚠️ No se encontró.' });
+            // LOG 1: Iniciando búsqueda
+            console.log(`[DEBUG] Iniciando búsqueda para: ${query}`)
+            
+            const search = await yts(query)
+            const video = search.all[0]
 
-            // 2. Usamos TU API (la de la imagen)
-            const dlApi = `https://api.evogb.org/dl/ytmp4?url=${encodeURIComponent(video.url)}&quality=360p&key=${key}`;
-            const { data } = await axios.get(dlApi);
-            if (!data.status) throw new Error("API error");
+            if (!video) {
+                console.log(`[DEBUG] No se encontró nada con yt-search`)
+                await sock.sendMessage(from, { react: { text: '❌', key: m.key } })
+                return sock.sendMessage(from, { text: '⚠️ No se encontraron resultados.' }, { quoted: m })
+            }
 
-            // 3. Descarga temporal al disco (para procesar el códec)
-            const response = await axios({ method: 'get', url: data.data.url, responseType: 'stream' });
-            const writer = fs.createWriteStream(tmpFile);
-            response.data.pipe(writer);
+            const urlVideo = video.url
+            console.log(`[DEBUG] Video encontrado: ${video.title} | URL: ${urlVideo}`)
 
-            await new Promise((resolve, reject) => {
-                writer.on('finish', resolve);
-                writer.on('error', reject);
-            });
+            // LOG 2: Llamando a la API de Delirius
+            console.log(`[DEBUG] Llamando a Delirius API: https://api.delirius.store/download/ytmp4?url=${urlVideo}`)
+            
+            const { data } = await axios.get(`https://api.delirius.store/download/ytmp4?url=${urlVideo}`)
 
-            // 4. FIX DE CÓDEC: Convertimos el audio a AAC estándar y el video a H.264
-            // Esto arregla el error de "decodificador necesario" que viste en tu PC
-            await execPromise(`ffmpeg -i ${tmpFile} -c:v copy -c:a aac -b:a 128k -movflags faststart ${outFile}`);
+            // LOG 3: Respuesta de la API
+            console.log(`[DEBUG] Respuesta Delirius:`, JSON.stringify(data, null, 2))
 
-            const videoBuffer = fs.readFileSync(outFile);
+            if (!data.status) {
+                await sock.sendMessage(from, { react: { text: '❌', key: m.key } })
+                return sock.sendMessage(from, { text: '⚠️ La API no pudo procesar este video.' }, { quoted: m })
+            }
 
-            // 5. Enviar a WhatsApp
+            const vid = data.data
+            const linkDescarga = vid.download
+
+            let info = `🎥 *YOUTUBE MP4 — CHARLY-BOT*\n\n`
+            info += `📌 *Título:* ${vid.title}\n`
+            info += `👤 *Canal:* ${vid.author || video.author.name}\n`
+            info += `⚙️ *Calidad:* ${vid.quality || '360p'}\n\n`
+            info += `> *${dev} x Zona Developers*`
+
+            // LOG 4: Intentando enviar el archivo
+            console.log(`[DEBUG] Enviando video desde: ${linkDescarga}`)
+
             await sock.sendMessage(from, { 
-                video: videoBuffer, 
-                caption: `✅ *${video.title}*\n⚡ *${dev}*`,
-                mimetype: 'video/mp4'
-            }, { quoted: m });
+                video: { url: linkDescarga }, 
+                caption: info,
+                mimetype: 'video/mp4',
+                fileName: `${vid.title}.mp4`
+            }, { quoted: m })
 
-            await sock.sendMessage(from, { react: { text: '✅', key: m.key } });
+            await sock.sendMessage(from, { react: { text: '✅', key: m.key } })
 
-        } catch (error) {
-            console.error(error);
-            sock.sendMessage(from, { text: '🛑 Error: La API mandó un archivo que no se pudo procesar.' });
-        } finally {
-            // Limpiamos los archivos en Railway (recuerda que solo tienes 1GB de RAM)
-            if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
-            if (fs.existsSync(outFile)) fs.unlinkSync(outFile);
+        } catch (e) {
+            // LOG DE ERROR CRÍTICO
+            console.error("======== [ ERROR YTMP4 ] ========")
+            console.error(e)
+            console.error("================================")
+            
+            await sock.sendMessage(from, { react: { text: '❌', key: m.key } })
+            sock.sendMessage(from, { text: `⚠️ Error al obtener el video: ${e.message}` }, { quoted: m })
         }
     }
-};
+}
