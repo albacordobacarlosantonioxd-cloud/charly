@@ -28,7 +28,7 @@ export default {
             await sock.sendMessage(from, {
                 audio: audioBuffer,
                 mimetype: 'audio/mp4', // Cambiado a mp4 para mejor compatibilidad en WP
-                ptt: true
+                ptt: false
             }, { quoted: m });
 
         } catch (e) {
