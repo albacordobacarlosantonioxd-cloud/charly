@@ -1,46 +1,32 @@
+function getNumber(jid = '') {
+    return String(jid || '').split(':')[0].split('@')[0]
+}
+
 export default {
-    name: 'pfp',
-    category: 'herramientas',
-    run: async (sock, m, from) => {
+    command: ['pfp', 'profilepic', 'pp'],
+    help: ['pfp @user', 'pfp <quoted>'],
+    description: 'Obtiene la foto de perfil de un usuario.',
+    category: 'tools',
+    async execute({ sock, m }) {
+        // Detecta si mencionaste a alguien, respondiste a un mensaje o si es para ti mismo
+        const target = m.mentions?.[0] || m.quoted?.sender || m.sender
+        
         try {
-            // 1. Obtener quién es el objetivo (citado, mención o el que escribe)
-            let who;
-            if (m.isGroup) {
-                who = m.quoted ? m.quoted.sender : (m.mentionedJid && m.mentionedJid[0]) ? m.mentionedJid[0] : m.sender;
-            } else {
-                who = m.quoted ? m.quoted.sender : m.sender;
-            }
+            // Intentamos obtener la URL de la imagen
+            const pp = await sock.profilePictureUrl(target, 'image')
+            
+            return await sock.sendMessage(m.chat, {
+                image: { url: pp },
+                caption: `🏮 *Foto de perfil de:* @${getNumber(target)}`,
+                mentions: [target]
+            }, { quoted: m })
 
-            // 2. Limpieza de JID ultra segura
-            const targetJid = who.includes('@') ? who.split(':')[0] + '@s.whatsapp.net' : who;
-
-            // Reacción de búsqueda
-            await sock.sendMessage(from, { react: { text: '🔍', key: m.key } });
-
-            let pp;
-            try {
-                // Intentamos obtener la foto HD
-                pp = await sock.profilePictureUrl(targetJid, 'image');
-            } catch (e) {
-                // Si no tiene foto o hay error, foto por defecto
-                pp = 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png';
-            }
-
-            const number = targetJid.split('@')[0];
-
-            // 3. Envío con mención y validación de URL
-            await sock.sendMessage(from, { 
-                image: { url: pp }, 
-                caption: `✨ *Foto de Perfil de:* @${number}`,
-                mentions: [targetJid]
-            }, { quoted: m });
-
-            // Reacción de éxito
-            await sock.sendMessage(from, { react: { text: '✅', key: m.key } });
-
-        } catch (e) {
-            // Este log te dirá exactamente qué pasó en la terminal de tu HP o Railway
-            console.error("❌ Error en comando PFP:", e);
+        } catch (error) {
+            // Este error salta si el usuario no tiene foto o la tiene "solo para contactos"
+            return await sock.sendMessage(m.chat, {
+                text: `❌ No pude obtener la foto de perfil de @${getNumber(target)}.\n\n> *Nota:* Puede que no tenga foto o sea privada.`,
+                mentions: [target]
+            }, { quoted: m })
         }
     }
-};
+}
