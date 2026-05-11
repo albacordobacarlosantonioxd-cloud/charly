@@ -2,16 +2,12 @@ export default {
   name: 'link',
   aliases: ['enlace', 'invitacion'],
   category: 'grupos',
-  run: async (sock, m, from, text, { isAdmin, isGroup, botAdmin }) => {
+  run: async (sock, m, from, text, { isGroup }) => {
     try {
-      // 1. Verificación de Grupo
+      // Única verificación: que sea un grupo
       if (!isGroup) return sock.sendMessage(from, { text: "❌ Este comando solo funciona en grupos, pariente." }, { quoted: m });
 
-      // 2. Verificación de Admin (Tanto el usuario como el bot)
-      if (!isAdmin) return sock.sendMessage(from, { text: "⚠️ Solo los administradores pueden pedir el enlace del grupo." }, { quoted: m });
-      if (!botAdmin) return sock.sendMessage(from, { text: "❌ Necesito ser administrador para generar el enlace." }, { quoted: m });
-
-      // 3. Obtener el código
+      // Obtener el código directamente
       const code = await sock.groupInviteCode(from);
       const link = `https://chat.whatsapp.com/${code}`;
 
@@ -24,8 +20,9 @@ export default {
 
     } catch (e) {
       console.error("Error al obtener link:", e);
+      // Si falla aquí, casi seguro es porque el bot NO es admin
       await sock.sendMessage(from, { 
-        text: `> Ocurrió un error inesperado al intentar obtener el enlace.\n> [Error: *${e.message}*]\n\n_Asegúrate de que el bot sea administrador._` 
+        text: `❌ *Error:* No pude generar el enlace. \n\n> 💡 _Asegúrate de que el bot sea administrador del grupo para que WhatsApp me dé permiso de ver el link._` 
       }, { quoted: m });
     }
   },
