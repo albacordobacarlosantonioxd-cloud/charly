@@ -1,44 +1,43 @@
 export default {
     name: "del",
     category: 'grupos',
-    aliases: ["delete"],
-    run: async (sock, m, from, text, quoted, args, isAdmin, isGroup, sender) => {
-        // 1. Solo en grupos
+    aliases: ["delete", "borrar"],
+    // Extraemos todo lo necesario del objeto extra (quinto parámetro)
+    run: async (sock, m, from, text, { isAdmin, isGroup, sender, isOwner }) => {
+        
+        // 1. Verificación de Grupo
         if (!isGroup) return sock.sendMessage(from, { text: "❌ Este comando solo funciona en grupos." }, { quoted: m });
 
-        const normalizedSender = sender ? (sender.split(':')[0] + '@s.whatsapp.net') : '';
-        // Aquí defines quién es el dueño del bot por si quiere borrar algo sin ser admin
-        const isOwner = ["82906290606190@s.whatsapp.net"].includes(normalizedSender);
-
-        // 2. ¿Es admin del grupo O es el dueño del bot?
+        // 2. ¿Es admin del grupo O es el dueño del bot? 
+        // (Nota: isOwner ya suele venir calculado en el index, pero si no, usamos tu lógica)
         if (!isAdmin && !isOwner) {
-            return sock.sendMessage(from, { text: "❌ No tienes permisos. Debes ser admin del grupo." }, { quoted: m });
+            return sock.sendMessage(from, { text: "❌ No tienes permisos. Debes ser admin del grupo para borrar mensajes." }, { quoted: m });
         }
 
-        // 3. Obtener el mensaje referenciado
-        const quotedMsg = m.message.extendedTextMessage?.contextInfo;
-        if (!quotedMsg?.stanzaId) {
+        // 3. Obtener el mensaje citado usando m.quoted simplificado
+        if (!m.quoted) {
             return sock.sendMessage(from, { text: "❌ Responde al mensaje que deseas eliminar." }, { quoted: m });
         }
 
-        const msgSender = quotedMsg.participant || quotedMsg.remoteJid;
         const botId = sock.user.id.split(":")[0] + "@s.whatsapp.net";
 
-        // 4. Estructura para borrar
+        // 4. Estructura de la llave (key) para eliminar
         const key = {
             remoteJid: from,
-            fromMe: msgSender === botId, // true si el bot borra su propio mensaje
-            id: quotedMsg.stanzaId,
-            participant: msgSender
+            fromMe: m.quoted.sender === botId, // Si el mensaje citado es del bot
+            id: m.quoted.id,
+            participant: m.quoted.sender
         };
 
         try {
-            // El bot intenta borrarlo directamente
+            // Intentamos borrar el mensaje
             await sock.sendMessage(from, { delete: key });
         } catch (err) {
             console.error("Error al borrar:", err);
-            // Si el bot no es admin en el WP, saltará este error
-            await sock.sendMessage(from, { text: "❌ Error: Asegúrate de que el bot sea admin del grupo para borrar mensajes ajenos." }, { quoted: m });
+            // Mensaje de error amigable
+            await sock.sendMessage(from, { 
+                text: "❌ No pude borrar el mensaje. Asegúrate de que soy admin del grupo para borrar mensajes de otros." 
+            }, { quoted: m });
         }
     }
 };
