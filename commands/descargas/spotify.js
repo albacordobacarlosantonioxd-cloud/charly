@@ -1,67 +1,82 @@
-import axios from "axios";
+import fetch from 'node-fetch'
 
 export default {
     name: "spotify",
     category: 'descargas',
-    aliases: ["sp", "sps"],
-    run: async (sock, m, from, text, quoted, args) => {
-        // Validamos que el usuario mande un link
-        if (!text || !text.includes("spotify.com")) {
-            return sock.sendMessage(from, { text: "Pega un enlace de Spotify para descargar la música." });
-        }
+    aliases: ['sp', 'music', 'spt'],
+    run: async (sock, m, from, text, { usedPrefix, command }) => {
+        const dev = "𝘽𝙮 𝘾𝙝𝙖𝙧𝙡𝙮"
+        const chn = "𝘾𝙃𝘼𝙍𝙇𝙔-𝘽𝙊𝙏" // <--- Actualizado aquí
+        
+        let query = text ? text.trim() : (m.quoted?.text || null)
+        
+        if (!query) return sock.sendMessage(from, { 
+            text: `『 ⚡ *CHARLY SPOTIFY* ⚡ 』\n\n> 🧩 *Ingrese nombre o link de la canción.*\n> 💡 *Ej:* ${usedPrefix + command} Mask Off` 
+        }, { quoted: m })
+
+        await sock.sendMessage(from, { react: { text: '⚡', key: m.key } })
 
         try {
-            const key = "sasuke"; 
-            const urlFinal = `https://api.evogb.org/dl/spotify?url=${encodeURIComponent(text)}&key=${key}`;
+            const b = (s) => Buffer.from(s, 'base64').toString('utf-8')
+            const a = b("aHR0cHM6Ly9hcGkuZXZvZ2Iub3Jn")
+            const k = b("c2FzdWtl")
 
-            console.log("--- DEBUG SPOTIFY DL ---");
-            console.log("Descargando link:", text);
+            let trackUrl = query
+            const isUrl = query.match(/^(https?:\/\/)?(open\.spotify\.com|spotify\.link)\/.+$/gi)
 
-            // Aumentamos el timeout a 60 segundos porque las descargas tardan
-            const response = await axios.get(urlFinal, { timeout: 60000 });
-            
-            // Log para ver qué campos trae el resultado
-            console.log("Respuesta API Spotify DL:", JSON.stringify(response.data).slice(0, 250) + "...");
-
-            const data = response.data.result || response.data.data;
-
-            if (!data) {
-                console.error("❌ No se encontraron datos en la respuesta de la API");
-                return sock.sendMessage(from, { text: "No pude obtener el archivo de Spotify, checa el link." });
+            if (!isUrl) {
+                const sRes = await fetch(`${a}/search/spotify?query=${encodeURIComponent(query)}&key=${k}`)
+                const sData = await sRes.json()
+                if (!sData.status || !sData.result.length) {
+                    await sock.sendMessage(from, { react: { text: '❌', key: m.key } })
+                    return sock.sendMessage(from, { text: '*🏮 [ ERROR ]* No encontré ninguna canción con ese nombre.' }, { quoted: m })
+                }
+                trackUrl = sData.result[0].link
             }
 
-            // Detectamos la URL de descarga (probamos varios nombres comunes)
-            const downloadUrl = data.url || data.dl_url || data.download || data.link;
+            const dlRes = await fetch(`${a}/dl/spotify?url=${encodeURIComponent(trackUrl)}&key=${k}`)
+            const dlData = await dlRes.json()
 
-            if (!downloadUrl) {
-                console.error("❌ No se encontró una URL de descarga válida en:", data);
-                return sock.sendMessage(from, { text: "La API no proporcionó un enlace de descarga válido." });
+            if (!dlData.status) {
+                await sock.sendMessage(from, { react: { text: '❌', key: m.key } })
+                return sock.sendMessage(from, { text: '*🏮 [ FALLO ]* Error al extraer el audio de Spotify.' }, { quoted: m })
             }
 
-            // Enviamos el archivo de audio directamente
-            console.log("🚀 Enviando audio a WhatsApp...");
+            const info = dlData.data
+
+            let txt = `┏━━━━━━━━━━━━━━━━━━┓\n`
+            txt += `┃   🏮  *CHARLY SPOTIFY* 🏮\n`
+            txt += `┣━━━━━━━━━━━━━━━━━━┛\n`
+            txt += `┃\n`
+            txt += `┃ 🎵 *Tɪ́ᴛᴜʟᴏ:* ${info.name}\n`
+            txt += `┃ 👤 *Aʀᴛɪsᴛᴀ:* ${info.artist}\n`
+            txt += `┃ 💿 *Áʟʙᴜᴍ:* ${info.album}\n`
+            txt += `┃ ⏱️ *Tɪᴇᴍᴘᴏ:* ${info.duration}\n`
+            txt += `┃\n`
+            txt += `┃ ⚙️ *Esᴛᴀᴅᴏ:* 🟢 Inyectado\n`
+            txt += `┃\n`
+            txt += `┣━━━━━━━━━━━━━━━━━━┓\n`
+            txt += `┃ ⚡ *${dev}*\n`
+            txt += `┃ 📡 *${chn}*\n`
+            txt += `┗━━━━━━━━━━━━━━━━━━┛`
+
             await sock.sendMessage(from, { 
-                audio: { url: downloadUrl }, 
-                mimetype: 'audio/mpeg',
-                fileName: `${data.title || 'music'}.mp3`,
-                ptt: false // Cambia a true si quieres que se envíe como nota de voz
-            }, { quoted: m });
+                image: { url: info.imageHD || info.image }, 
+                caption: txt 
+            }, { quoted: m })
+
+            await sock.sendMessage(from, { 
+                audio: { url: info.url }, 
+                mimetype: 'audio/mpeg', 
+                fileName: `${info.name}.mp3` 
+            }, { quoted: m })
+
+            await sock.sendMessage(from, { react: { text: '🔥', key: m.key } })
 
         } catch (e) {
-            console.error("--- ERROR SP DL DETALLADO ---");
-            if (e.response) {
-                // Error de la API (403, 404, 500)
-                console.error("Status:", e.response.status);
-                console.error("Data:", e.response.data);
-            } else if (e.code === 'ECONNABORTED') {
-                console.error("Error: Tiempo de espera agotado (Timeout)");
-                await sock.sendMessage(from, { text: "La descarga tardó demasiado. Intenta con una canción más corta." });
-                return;
-            } else {
-                console.error("Mensaje:", e.message);
-            }
-            
-            await sock.sendMessage(from, { text: "El servidor de Spotify no respondió o el link es inválido." });
+            console.error("Error en Spotify:", e)
+            await sock.sendMessage(from, { react: { text: '❌', key: m.key } })
+            sock.sendMessage(from, { text: `❌ Ocurrió un error inesperado: ${e.message}` }, { quoted: m })
         }
     }
-};
+}

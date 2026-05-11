@@ -6,21 +6,23 @@ export default {
     name: "toreal",
     category: 'ia',
     aliases: ["realista", "animetoreal"],
-    run: async (sock, m, from, text, quoted) => {
+    // Usamos el objeto extra para recibir usedPrefix y command
+    run: async (sock, m, from, text, { usedPrefix, command }) => {
         try {
-            // Verificamos si hay una imagen
-            const isQuotedImage = quoted?.imageMessage;
-            const isImage = m.message?.imageMessage;
+            // Usamos m.quoted que ya viene procesado por el index.js
+            const q = m.quoted ? m.quoted : m;
+            const mime = (q.message || q).imageMessage;
 
-            if (!isImage && !isQuotedImage) {
-                return sock.sendMessage(from, { text: '❌ Responde a una imagen de anime para convertirla a realista.' }, { quoted: m });
+            if (!mime) {
+                return sock.sendMessage(from, { 
+                    text: `❌ Responde a una imagen de anime para convertirla a realista usando *${usedPrefix + command}*` 
+                }, { quoted: m });
             }
 
             await sock.sendMessage(from, { text: '⏳ *Transformando a estilo realista... esto puede tardar unos segundos.*' }, { quoted: m });
 
-            // Descargamos la imagen
-            const messageToDownload = isQuotedImage ? quoted.imageMessage : m.message.imageMessage;
-            const stream = await downloadContentFromMessage(messageToDownload, 'image');
+            // Descargamos la imagen de forma limpia
+            const stream = await downloadContentFromMessage(mime, 'image');
             
             let buffer = Buffer.from([]);
             for await (const chunk of stream) {
@@ -33,7 +35,7 @@ export default {
                 filename: 'anime_image.jpg', 
                 contentType: 'image/jpeg' 
             });
-            formData.append('method', 'local'); // Según el parámetro de la imagen que pasaste
+            formData.append('method', 'local'); 
 
             const apiKey = "sasuke";
             const apiUrl = `https://api.evogb.org/ai/toreal?key=${apiKey}`;
@@ -44,12 +46,11 @@ export default {
                     ...formData.getHeaders(),
                     'User-Agent': 'Mozilla/5.0'
                 },
-                responseType: 'arraybuffer', // Para recibir la imagen directamente
+                responseType: 'arraybuffer',
                 timeout: 120000 
             });
 
             if (response.data) {
-                // Verificamos que no sea un JSON de error camuflado
                 const beginning = response.data.slice(0, 50).toString();
                 if (beginning.includes('{"status":false')) {
                     throw new Error("La API no pudo procesar esta imagen.");
@@ -64,7 +65,7 @@ export default {
 
         } catch (err) {
             console.error("ERROR EN TOREAL:", err);
-            let msg = "Error al transformar la imagen.";
+            let msg = err.message || "Error al transformar la imagen.";
             if (err.response?.status === 500) {
                 msg = "El servidor de la IA está saturado, intenta en un momento.";
             }
