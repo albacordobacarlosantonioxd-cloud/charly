@@ -11,13 +11,13 @@ export default {
         let query = text ? text.trim() : (m.quoted?.text || null)
         
         if (!query || !query.includes('spotify.com')) return sock.sendMessage(from, { 
-            text: `『 ⚡ *CHARLY ALBUM* ⚡ 』\n\n> 🧩 *Ingrese el link del álbum.*\n> 💡 *Ej:* ${usedPrefix + command} https://open.spotify.com/album/link` 
+            text: `『 ⚡ *CHARLY ALBUM* ⚡ 』\n\n> 🧩 *Ingrese el link del álbum.*\n> 💡 *Ej:* ${usedPrefix + command} https://open.spotify.com/album/22DL6IRGNYNenKej7aw8pO` 
         }, { quoted: m })
 
         await sock.sendMessage(from, { react: { text: '💽', key: m.key } })
 
         try {
-            // API de Delirius Store
+            // 1. Obtenemos la lista de canciones del álbum
             const res = await fetch(`https://api.delirius.store/download/spotifyalbum?url=${encodeURIComponent(query)}`)
             const json = await res.json()
 
@@ -37,30 +37,38 @@ export default {
             txt += `┃ 👤 *Aʀᴛɪsᴛᴀ:* ${tracks[0]?.artist || 'Varios'}\n`
             txt += `┃ 🔢 *Tᴏᴛᴀʟ Tʀᴀᴄᴋs:* ${album.total_tracks}\n`
             txt += `┃\n`
-            txt += `┃ ⚙️ *Esᴛᴀᴅᴏ:* Descargando lista...\n`
+            txt += `┃ ⚙️ *Esᴛᴀᴅᴏ:* Descargando audios...\n`
             txt += `┃\n`
             txt += `┣━━━━━━━━━━━━━━━━━━┓\n`
             txt += `┃ ⚡ *${dev}*\n`
             txt += `┃ 📡 *${chn}*\n`
             txt += `┗━━━━━━━━━━━━━━━━━━┛`
 
-            // 1. Mandamos la imagen del álbum y la info una sola vez
+            // Mandamos la portada con la info
             await sock.sendMessage(from, { 
                 image: { url: album.image }, 
                 caption: txt 
             }, { quoted: m })
 
-            // 2. Ciclo para mandar todos los audios
+            // 2. Ciclo para convertir cada track a MP3 real
             for (let track of tracks) {
-                if (track.url) {
-                    await sock.sendMessage(from, { 
-                        audio: { url: track.url }, 
-                        mimetype: 'audio/mpeg', 
-                        fileName: `${track.title}.mp3` 
-                    }, { quoted: m })
-                    
-                    // Pequeña pausa de 2 segundos entre audios para evitar ban
-                    await new Promise(resolve => setTimeout(resolve, 2000))
+                try {
+                    // Llamamos al endpoint de descarga individual para obtener el audio real
+                    const dlRes = await fetch(`https://api.delirius.store/download/spotifydl?url=${encodeURIComponent(track.url)}`)
+                    const dlData = await dlRes.json()
+
+                    if (dlData.status && dlData.data.url) {
+                        await sock.sendMessage(from, { 
+                            audio: { url: dlData.data.url }, 
+                            mimetype: 'audio/mpeg', 
+                            fileName: `${track.title}.mp3` 
+                        }, { quoted: m })
+                        
+                        // Pausa de 3 segundos para no saturar tu Zorin OS ni la API
+                        await new Promise(resolve => setTimeout(resolve, 3000))
+                    }
+                } catch (err) {
+                    console.log(`Error descargando track: ${track.title}`)
                 }
             }
 
